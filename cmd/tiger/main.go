@@ -1,7 +1,25 @@
 /*
 TODO(tso):
  - ls => ls-files
- - cat <branch> <file> => cat-file blob <derived hash>
+ - cat [<branch>] <file> => cat-file blob <derived hash>
+ - fix log --pretty="format string with spaces!"
+    - and all other such args
+ - add 1 2 3, rm 1 2 3, checkout 1 2 3
+ - rm [WILDCARD] that doesn't fail miserably
+ - auto-update status using inotify/fswatch
+    - we could also periodically ping origin with fetch --dry-run but let's not get ahead of ourselves
+    - any of this automatic stuff should not interrupt the user while typing
+      but that's unavoidable without manipulating the terminal to insert a line
+      and reprint what the user has already typed in e.g.
+
+      git(master)> commit -m add feature foo to
+      origin(git@github.com:octocat/octoverse) 1 new commit! 2018-08-01 02:30:43a
+      git(master)> commit -m add feature foo to wait ^C
+      git(master)> pull
+      blabla your branch is now even with origin/master
+      git(master)> commit ...
+
+ - add diff --stat to status
 
  see README.txt for more features to implement
 
@@ -10,10 +28,19 @@ NOTE(tso): things that will lead to trouble so we shouldn't do right now/ever:
  - support for piping/indirection
  - password prompts
 
-NOTE(tso): things that are impossible without manipulating the terminal:
- - tab-complete without hitting enter
- - paging
+NOTE(tso): things that are _impossible_ without _completely_ manipulating the terminal:
  - password prompts
+ - tab-complete without hitting enter
+ - paging: not only essential for log, diff BUT ALSO:
+    - this means no add/checkout -p!
+ - checklist for selecting files interactively
+ - ctrl+d, bash/emacs bindings ctrl+a ctrl+e ctrl+u
+    - I don't even know all of them I just know those ._.
+ - add -i
+ - prevent ctrl+c from exiting immediately
+    - but maybe this is actually a good feature?
+ - be able to print to screen for async events
+   without disrupting what a user is currently typing
 */
 package main
 
