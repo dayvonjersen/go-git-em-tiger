@@ -47,10 +47,12 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strings"
+	"time"
 )
 
 const (
@@ -97,6 +99,58 @@ func println(stdout, stderr string, err error) error {
 	}
 
 	return err
+}
+
+func dir() (string, error) {
+	stdout, _, err := git("worktree", "list", "--porcelain")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(
+		strings.TrimSpace(
+			strings.Split(stdout, "\n")[0]), "worktree ") + string(os.PathSeparator) + ".git", nil
+}
+
+func config(param string) (string, error) {
+	stdout, _, err := git("config", param)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+func draftFile() (string, error) {
+	dir, err := dir()
+	if err != nil {
+		return "", err
+	}
+	return dir + string(os.PathSeparator) + "COMMIT_DRAFTMSG", nil
+}
+
+func fileExists(filename string) bool {
+	f, err := os.Open(filename)
+	f.Close()
+	if os.IsNotExist(err) {
+		return false
+	}
+	if err != nil {
+		panic(err)
+	}
+	return true
+}
+
+func fileGetContents(filename string) string {
+	contents := &buf{}
+	f, err := os.Open(filename)
+	if err != nil {
+		panic(err)
+	}
+	_, err = io.Copy(contents, f)
+	f.Close()
+	if err != nil && err != io.EOF {
+		panic(err)
+	}
+	return contents.String()
 }
 
 // current branch to display in prompt()
@@ -148,6 +202,7 @@ func main() {
 
 	// NOTE(tso): the downside to this approach is we can't easily have tab-complete
 	scanner := bufio.NewScanner(os.Stdin)
+everywhere:
 	for scanner.Scan() {
 		args := strings.Split(scanner.Text(), " ")
 
@@ -162,7 +217,42 @@ func main() {
 
 		switch strings.TrimSpace(args[0]) {
 		case "": // do nothing
+		case "exit", "quit":
+			break everywhere
+
+		// feature: draft: edit commit message while staging
+		case "draft":
+			draft, err := draftFile()
+			if err != nil {
+				println("", "", err)
+				break
+			}
+			ed, err := config("core.editor")
+			if err != nil {
+				println("", "", err)
+				break
+			}
+			cmd("cmd.exe", "/c", "start", ed, draft)
+
 		case "commit":
+			draft, err := draftFile()
+			if err == nil {
+				if fileExists(draft) {
+					if len(args) == 1 {
+						msg := fileGetContents(draft)
+						println(git("commit", "-m", msg))
+						os.Remove(draft)
+					} else {
+						ch := make(chan struct{}, 1)
+						go func() { println(git("commit", "-t", draft)); ch <- struct{}{} }()
+						<-time.After(time.Millisecond * 100)
+						os.Remove(draft)
+						<-ch
+					}
+					break
+				}
+			}
+
 			if len(args) == 1 {
 				// standard behavior (open editor, abort due to empty message)
 				println(git("commit"))
