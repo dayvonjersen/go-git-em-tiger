@@ -1,10 +1,66 @@
 /*
 TODO(tso):
+ - attach io to subcommands that can launch editor
+    - commit, revert, merge, rebase, add -i
+ - attach pager to subcommands that use it
+    - diff, log, show, cat
+ - cd => cwd
+    - add GIT_DIR to prompt
  - ls => ls-files
  - cat [<branch>] <file> => cat-file blob <derived hash>
+ - config (no args): --list
+    - separate global, local, system
+    - align around =
+    - use pager
+ - ignore:
+    - ls files currently ignored
+    - cat .gitignore and .git/info/exclude
+ - interactively setup remotes when push/pull fails
  - fix log --pretty="format string with spaces!"
     - and all other such args
- - add 1 2 3, rm 1 2 3, checkout 1 2 3
+ - stage: interactive staging
+    ONE-BY-ONE: yes | git stage
+       -OR-
+    SELECT BY: git stage *.go
+     - index
+     - range
+     - wildcard
+     - file extension (include hidden)
+
+    APPLY:
+     - skip (do nothing)
+     - ignore: echo $filename >> .gitignore
+     - add
+     - add -p
+     - reset HEAD
+     - checkout -f
+         - fallback: cat-file blob [current branch] [hash] > file
+     - checkout -p
+     - rm --cached
+     - rm -rf --no-preserve-root (os.Remove)
+
+    PREVIEW CHANGES:
+     - diff HEAD
+     - diff HEAD --stat
+
+    ABORTABORTABORT:
+     - [q]uit o_k: done.
+     - [u]ndo last action
+     - [U]ndo like it never even happened (restore index)
+
+    COMMIT:
+     - [d]raft
+     - [c]ommit now
+     - [checkin]
+
+    INVOKE:
+    stage: add/remove/checkout...
+    add: add only
+    rm: remove only
+    unstage: alias for reset HEAD and/or interactive remove/checkout
+
+    maybe numbered options in addition to letters?
+
  - rm [WILDCARD] that doesn't fail miserably
  - auto-update status using inotify/fswatch
     - we could also periodically ping origin with fetch --dry-run but let's not get ahead of ourselves
@@ -28,19 +84,42 @@ NOTE(tso): things that will lead to trouble so we shouldn't do right now/ever:
  - support for piping/indirection
  - password prompts
 
-NOTE(tso): things that are _impossible_ without _completely_ manipulating the terminal:
+NOTE(tso): things that are possible thanks to one stackoverflow and their use of stty
+           and a bradfitz post on golang-nuts from 2012 that i forgot about
+ - support for shell commands
+ - support for piping/indirection
  - password prompts
+
+ ...we can read stdin 1 char at a time now! which means
+    - delete non-printing characters
+    - buffer line currently being typed and reprint if interrupted by status/fetch update (async event)
+
+ and the following are now possible:
+
+read -n 1
  - tab-complete without hitting enter
- - paging: not only essential for log, diff BUT ALSO:
-    - this means no add/checkout -p!
- - checklist for selecting files interactively
  - ctrl+d, bash/emacs bindings ctrl+a ctrl+e ctrl+u
     - I don't even know all of them I just know those ._.
- - add -i
- - prevent ctrl+c from exiting immediately
-    - but maybe this is actually a good feature?
  - be able to print to screen for async events
    without disrupting what a user is currently typing
+
+cmd.Std(.*) = os.Std\1
+ - paging: not only essential for log, diff BUT ALSO:
+    - this means yes add/checkout -p!
+ - add -i
+
+NOTE(tso): still not possible:
+ - prevent ctrl+c from exiting immediately
+    - but maybe this is actually a good feature?
+ - checklist but who needs that really
+
+TODO(tso): options
+    - fetch
+        - ping interval
+        - disable
+    - status-inotify
+        - disable
+    - draft (go immediately into draft, for terminal editor users)
 */
 package main
 
@@ -217,6 +296,51 @@ everywhere:
 
 		switch strings.TrimSpace(args[0]) {
 		case "": // do nothing
+		case "test":
+			cmd := exec.Command("git", "diff", "--color", "HEAD^^", "main.go")
+			// p, _ := config("core.pager")
+			diff := exec.Command("perl", "Z:\\Users\\Leek\\bin\\diff-so-fancy")
+
+			r, w := io.Pipe()
+			cmd.Stdout = w
+			diff.Stdin = r
+
+			pager := exec.Command("less", "--tabs=4", "-R", "-F", "-X")
+			r2, w2 := io.Pipe()
+			diff.Stdout = w2
+			pager.Stdin = r2
+			// pager.Stdin = r
+			pager.Stdout = os.Stdout
+
+			cmd.Start()
+			diff.Start()
+			pager.Start()
+			cmd.Wait()
+			w.Close()
+			diff.Wait()
+			w2.Close()
+			pager.Wait()
+		case "test2":
+			cmd := exec.Command("git", "diff", "--color", "HEAD^^", "main.go")
+			p, _ := config("core.pager")
+			pager := exec.Command("sh", "-c", "cat - | "+p)
+
+			r, w := io.Pipe()
+			cmd.Stdout = w
+			pager.Stdin = r
+			pager.Stdout = os.Stdout
+
+			cmd.Start()
+			pager.Start()
+			cmd.Wait()
+			w.Close()
+			pager.Wait()
+		case "test3":
+			cmd := exec.Command("git", "commit", "--amend")
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
 		case "exit", "quit":
 			break everywhere
 

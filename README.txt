@@ -29,9 +29,25 @@ Rather, I want to experiment with finding solutions that will let me do the
 most common things in a simpler way / with a better user experience:
 
     # edit/draft a commit message while staging or
-    # stage/unstage while drafting a commit message
-    ???
+    # stage/unstage while writing a commit message
 
+    NOTE(tso): draft only makes sense if you can have the editor and the shell
+               open simultaneously, so terminal editor users will have to have
+               each in separate panes/tabs/windows/screen or tmux sessions
+
+    git draft                     #                   *start writing commit message*
+    git add something             # "oh right..."     *write about something*
+    git reset HEAD something_else # "hm, next commit" *delete line describing something_else*
+    git mv yet_another thing      # "..."             *:%s/yet_another/thing/g*
+    # :wq
+    git commit
+    [master b1251f2] I wrote this commit message while I was staging :D
+     1 file changed, 1 insertion(+)
+
+    or at the end
+    git commit --edit # same as git commit -t $GIT_DIR/COMMIT_DRAFTMSG
+                      # except you don't have to change the "template" for it to count
+   
     # simple check-in
     git status
     git add .
