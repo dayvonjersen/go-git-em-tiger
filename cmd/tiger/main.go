@@ -1,6 +1,5 @@
 /*
 TODO(tso):
- - cat [<branch>] <file> => cat-file blob <derived hash>
  - config (no args): --list
     - separate global, local, system
     - align around =
@@ -198,7 +197,7 @@ func (c *cmd) AttachWithPipe(pipe *exec.Cmd) (err error) {
 	if err != nil {
 		return err
 	}
-	w.Close()
+	go w.Close()
 	return pipe.Wait()
 }
 
@@ -359,6 +358,7 @@ everywhere:
 			goto there
 		}
 
+	somewhere:
 		switch strings.TrimSpace(args[0]) {
 		case "": // do nothing
 		case "exit", "quit":
@@ -371,6 +371,50 @@ everywhere:
 				if err != nil {
 					fmt.Println(Red, err, Reset)
 				}
+			}
+		case "cat":
+			// TODO(tso): this could use a lot of improvements
+			// - don't rely on branch() cause it can print "(HEAD detached at bad1dea)"
+			// - resolve relative filepaths
+			// - make it clear somehow that this is not real cat
+
+			if len(args) < 2 {
+				fmt.Println(Red+"usage:"+Reset, "cat [branch (optional)] [filename]")
+				break
+			}
+
+			var treeish, filename string
+			if len(args) >= 3 {
+				treeish = args[1]
+				filename = strings.Join(args[2:], " ")
+			} else {
+				treeish = branch()
+				filename = strings.Join(args[1:], " ")
+			}
+
+			stdout, _, err := git("ls-tree", treeish).Output()
+			if err == nil {
+				// we're in a git repository
+				gitFiles := strings.Split(strings.TrimSpace(stdout), "\n")
+				for _, ln := range gitFiles {
+					var (
+						mode              int
+						thing, hash, name string
+					)
+					fmt.Sscanf(ln, "%d %s %s    %s", &mode, &thing, &hash, &name)
+
+					if filename == name {
+						git("cat-file", thing, hash).AttachWithPipe(pager())
+						break somewhere
+					}
+				}
+				fmt.Println(Red+"file:"+Reset, filename, Red+"not found @ revision:"+Reset, treeish)
+			} else {
+				if !fileExists(filename) {
+					fmt.Println(Red+"file not found:"+Reset, filename)
+					break
+				}
+				newCmd("cat", filename).AttachWithPipe(pager())
 			}
 		case "ls":
 			// TODO(tso): this could use a lot of improvements
@@ -498,7 +542,7 @@ everywhere:
 				println(git("push").Output())
 			}
 		case "log", "diff", "show": // things that use the pager XXX INCOMPLETE
-			args = append(append(args[:1], "--color"), args[1:]...)
+			args = append(args[:1], append([]string{"--color"}, args[1:]...)...)
 			git(args...).AttachWithPipe(pager())
 		default: // treat all other git commands as usual
 			git(args...).Attach()
