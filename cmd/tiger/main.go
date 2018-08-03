@@ -1,11 +1,5 @@
 /*
 TODO(tso):
- - attach io to subcommands that can launch editor
-    - commit, revert, merge, rebase, add -i
- - attach pager to subcommands that use it
-    - diff, log, show, cat
- - cd => cwd
-    - add GIT_DIR to prompt
  - ls => ls-files
  - cat [<branch>] <file> => cat-file blob <derived hash>
  - config (no args): --list
@@ -80,14 +74,10 @@ TODO(tso):
  see README.txt for more features to implement
 
 NOTE(tso): things that will lead to trouble so we shouldn't do right now/ever:
- - support for shell commands
- - support for piping/indirection
  - password prompts
 
 NOTE(tso): things that are possible thanks to one stackoverflow and their use of stty
            and a bradfitz post on golang-nuts from 2012 that i forgot about
- - support for shell commands
- - support for piping/indirection
  - password prompts
 
  ...we can read stdin 1 char at a time now! which means
@@ -102,11 +92,6 @@ read -n 1
     - I don't even know all of them I just know those ._.
  - be able to print to screen for async events
    without disrupting what a user is currently typing
-
-cmd.Std(.*) = os.Std\1
- - paging: not only essential for log, diff BUT ALSO:
-    - this means yes add/checkout -p!
- - add -i
 
 NOTE(tso): still not possible:
  - prevent ctrl+c from exiting immediately
@@ -166,17 +151,68 @@ func (b *buf) Write(p []byte) (n int, err error) {
 
 func (b *buf) String() string { return string(*b) }
 
-func cmd(command string, args ...string) (stdout, stderr string, err error) {
+type cmd struct {
+	cmd *exec.Cmd
+}
+
+func newCmd(command string, args ...string) *cmd {
+	return &cmd{exec.Command(command, args...)}
+}
+
+func (c *cmd) Output() (stdout, stderr string, err error) {
 	o, e := &buf{}, &buf{}
-	cmd := exec.Command(command, args...)
-	cmd.Stdout = o
-	cmd.Stderr = e
-	err = cmd.Run()
+	c.cmd.Stdout = o
+	c.cmd.Stderr = e
+	err = c.cmd.Run()
 	return o.String(), e.String(), err
 }
 
-func git(args ...string) (stdout, stderr string, err error) {
-	return cmd("git", args...)
+func (c *cmd) Attach() (err error) {
+	c.cmd.Stdin = os.Stdin
+	c.cmd.Stdout = os.Stdout
+	c.cmd.Stderr = os.Stderr
+	return c.cmd.Run()
+}
+
+func (c *cmd) AttachWithPipe(pipe *exec.Cmd) (err error) {
+	r, w := io.Pipe()
+	c.cmd.Stdout = w
+	pipe.Stdin = r
+	pipe.Stdout = os.Stdout
+
+	// NOTE(tso): yes I know about errWriter and stickyErr but I don't remember how to do them
+	err = c.cmd.Start()
+	if err != nil {
+		return err
+	}
+	err = pipe.Start()
+	if err != nil {
+		return err
+	}
+	err = c.cmd.Wait()
+	if err != nil {
+		return err
+	}
+	w.Close()
+	return pipe.Wait()
+}
+
+func git(args ...string) *cmd {
+	return newCmd("git", args...)
+}
+
+func pager() *exec.Cmd {
+	p, err := config("core.pager")
+	if err != nil {
+		panic(err)
+	}
+	// NOTE(tso): core.pager can have any arbitrary shell syntax
+	//            e.g.(mine right now): diff-so-fancy | less -RFX
+	//            rather than try to reinvent bash just to be able to
+	//            create an epic Pipe() abstraction
+	//            let's just do this for now, consequences be damned:
+	// -tso 2018-08-03 00:59:23a
+	return exec.Command("sh", "-c", "cat - | "+p)
 }
 
 // overriding built-in functions because I can't think of a better name
@@ -198,7 +234,7 @@ func println(stdout, stderr string, err error) error {
 }
 
 func gitDir() (string, error) {
-	stdout, _, err := git("worktree", "list", "--porcelain")
+	stdout, _, err := git("worktree", "list", "--porcelain").Output()
 	if err != nil {
 		return "", err
 	}
@@ -208,7 +244,7 @@ func gitDir() (string, error) {
 }
 
 func config(param string) (string, error) {
-	stdout, _, err := git("config", param)
+	stdout, _, err := git("config", param).Output()
 	if err != nil {
 		return "", err
 	}
@@ -256,7 +292,7 @@ func normalizePathSeparators(path string) string {
 
 // current branch to display in prompt()
 func branch() string {
-	stdout, _, err := git("branch")
+	stdout, _, err := git("branch").Output()
 	if err != nil {
 		return ""
 	}
@@ -269,42 +305,29 @@ func branch() string {
 }
 
 func prompt() {
-	// always show working tree status
-	// TODO:
-	// - add colors
-	// - truncate extra-long file-lists
-	// - columns?
-	//      - staged | unstaged | untracked OR
-	//      - wrapped columns for long file list
-	// - number and store in a slice so we can have "add 1 2 3" as a command
-	stdout, _, err := git("status", "-s", "-uall")
-	if err == nil {
-		// don't show "on working tree clean"
-		status := strings.TrimSpace(stdout)
-		if status != "" {
-			fmt.Println(status)
-		}
-	} else {
-		fmt.Println("\nType \"" + Blue + "init" + Reset + "\" to get started with git!")
-	}
-	// show cwd with respect to GIT_DIR
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic("unexpected error: " + err.Error())
 	}
 	cwd = normalizePathSeparators(cwd)
+
 	gwd, err := gitDir()
 	if err != nil {
 		// not a git repository
+		fmt.Println("\nType \"" + Blue + "init" + Reset + "\" to get started with git!")
 		fmt.Print(Red, "(not a git repository)", Reset, " ", path.Base(cwd), " % ")
-	} else {
-		gwd = normalizePathSeparators(gwd)
-
-		repo := path.Base(gwd)
-		dir := strings.TrimPrefix(cwd, gwd)
-
-		fmt.Print(Grey, "git@", Reset, Yellow, branch(), Reset, " ", Cyan, repo, dir, Reset, " % ")
+		return
 	}
+	gwd = normalizePathSeparators(gwd)
+
+	// always show working tree status first
+	git("status", "-s", "-uall").Attach()
+
+	repo := path.Base(gwd)
+	// show cwd with respect to GIT_DIR
+	cwd = strings.TrimPrefix(cwd, gwd)
+
+	fmt.Print(Grey, "git@", Reset, Yellow, branch(), Reset, " ", Cyan, repo, cwd, Reset, " % ")
 }
 
 func main() {
@@ -341,51 +364,6 @@ everywhere:
 					fmt.Println(Red, err, Reset)
 				}
 			}
-		case "test":
-			cmd := exec.Command("git", "diff", "--color", "HEAD^^", "main.go")
-			// p, _ := config("core.pager")
-			diff := exec.Command("perl", "Z:\\Users\\Leek\\bin\\diff-so-fancy")
-
-			r, w := io.Pipe()
-			cmd.Stdout = w
-			diff.Stdin = r
-
-			pager := exec.Command("less", "--tabs=4", "-R", "-F", "-X")
-			r2, w2 := io.Pipe()
-			diff.Stdout = w2
-			pager.Stdin = r2
-			// pager.Stdin = r
-			pager.Stdout = os.Stdout
-
-			cmd.Start()
-			diff.Start()
-			pager.Start()
-			cmd.Wait()
-			w.Close()
-			diff.Wait()
-			w2.Close()
-			pager.Wait()
-		case "test2":
-			cmd := exec.Command("git", "diff", "--color", "HEAD^^", "main.go")
-			p, _ := config("core.pager")
-			pager := exec.Command("sh", "-c", "cat - | "+p)
-
-			r, w := io.Pipe()
-			cmd.Stdout = w
-			pager.Stdin = r
-			pager.Stdout = os.Stdout
-
-			cmd.Start()
-			pager.Start()
-			cmd.Wait()
-			w.Close()
-			pager.Wait()
-		case "test3":
-			cmd := exec.Command("git", "commit", "--amend")
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Run()
 		case "exit", "quit":
 			break everywhere
 
@@ -401,7 +379,7 @@ everywhere:
 				println("", "", err)
 				break
 			}
-			cmd("cmd.exe", "/c", "start", ed, draft)
+			newCmd(ed, draft).Attach()
 
 		case "commit":
 			draft, err := draftFile()
@@ -409,11 +387,11 @@ everywhere:
 				if fileExists(draft) {
 					if len(args) == 1 {
 						msg := fileGetContents(draft)
-						println(git("commit", "-m", msg))
+						println(git("commit", "-m", msg).Output())
 						os.Remove(draft)
 					} else {
 						ch := make(chan struct{}, 1)
-						go func() { println(git("commit", "-t", draft)); ch <- struct{}{} }()
+						go func() { println(git("commit", "-t", draft).Output()); ch <- struct{}{} }()
 						<-time.After(time.Millisecond * 100)
 						os.Remove(draft)
 						<-ch
@@ -424,7 +402,7 @@ everywhere:
 
 			if len(args) == 1 {
 				// standard behavior (open editor, abort due to empty message)
-				println(git("commit"))
+				println(git("commit").Output())
 				break
 			}
 			args = args[1:]
@@ -449,11 +427,11 @@ everywhere:
 					flags = append(flags, arg)
 				}
 			}
-			println(git(append([]string{"commit"}, flags...)...))
+			println(git(append([]string{"commit"}, flags...)...).Output())
 
 			// feature: checkin: add everything, commit, and push
 		case "ci", "checkin":
-			if println(git("add", ".")) != nil {
+			if println(git("add", ".").Output()) != nil {
 				break
 			}
 			msg := strings.Join(args[1:], " ")
@@ -462,11 +440,14 @@ everywhere:
 				scanner.Scan()
 				msg = scanner.Text()
 			}
-			if println(git("commit", "--allow-empty-message", "-m", msg)) == nil {
-				println(git("push"))
+			if println(git("commit", "--allow-empty-message", "-m", msg).Output()) == nil {
+				println(git("push").Output())
 			}
+		case "log", "diff", "show": // things that use the pager XXX INCOMPLETE
+			args = append(append(args[:1], "--color"), args[1:]...)
+			git(args...).AttachWithPipe(pager())
 		default: // treat all other git commands as usual
-			println(git(args...))
+			git(args...).Attach()
 		}
 	there:
 		prompt()
