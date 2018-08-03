@@ -1,12 +1,15 @@
 /*
 TODO(tso):
- - ls => ls-files
  - cat [<branch>] <file> => cat-file blob <derived hash>
  - config (no args): --list
     - separate global, local, system
     - align around =
     - use pager
  - ignore:
+    - echo $filename >> .gitignore && git add .gitignore
+ - unignore:
+    - echo "!"$filename >> .gitignore && git add .gitignore
+ - ignored:
     - ls files currently ignored
     - cat .gitignore and .git/info/exclude
  - interactively setup remotes when push/pull fails
@@ -23,7 +26,7 @@ TODO(tso):
 
     APPLY:
      - skip (do nothing)
-     - ignore: echo $filename >> .gitignore
+     - ignore: echo $filename >> .gitignore && git add .gitignore
      - add
      - add -p
      - reset HEAD
@@ -105,6 +108,8 @@ TODO(tso): options
     - status-inotify
         - disable
     - draft (go immediately into draft, for terminal editor users)
+
+TODO(tso): special-case submodules
 */
 package main
 
@@ -340,7 +345,6 @@ func main() {
 	// TODO(tso): annoying welcome message
 	prompt()
 
-	// NOTE(tso): the downside to this approach is we can't easily have tab-complete
 	scanner := bufio.NewScanner(os.Stdin)
 everywhere:
 	for scanner.Scan() {
@@ -357,6 +361,10 @@ everywhere:
 
 		switch strings.TrimSpace(args[0]) {
 		case "": // do nothing
+		case "exit", "quit":
+			break everywhere
+
+		// reinventing coreutils poorly
 		case "cd":
 			if len(args) > 1 {
 				err := os.Chdir(strings.Join(args[1:], " "))
@@ -364,8 +372,54 @@ everywhere:
 					fmt.Println(Red, err, Reset)
 				}
 			}
-		case "exit", "quit":
-			break everywhere
+		case "ls":
+			// TODO(tso): this could use a lot of improvements
+			// - don't rely on branch() cause it can print "(HEAD detached at bad1dea)"
+			// - columns?
+			// - sorting
+			// - list directories first
+			// - merge the two lists and use colors or a [x] to show
+			//   which files are in the index, which are untracked, ignored...
+			// - diff stats
+			stdout, _, err := git("ls-tree", branch()).Output()
+			if err == nil {
+				// we're in a git repository
+				gitFiles := strings.Split(strings.TrimSpace(stdout), "\n")
+				for i, ln := range gitFiles {
+					var (
+						mode              int
+						thing, hash, name string
+					)
+					fmt.Sscanf(ln, "%d %s %s    %s", &mode, &thing, &hash, &name)
+					if thing == "tree" {
+						name += "/"
+					} else if thing != "blob" {
+						name = "(" + thing + ") " + name
+					}
+					gitFiles[i] = name
+				}
+				fmt.Println("files known to git:")
+				for _, f := range gitFiles {
+					fmt.Print("\t", f, "\n")
+				}
+				fmt.Println()
+			}
+
+			cwd, err := os.Open(".")
+			checkErr(err)
+			files, err := cwd.Readdir(-1)
+			checkErr(err)
+
+			fmt.Println("current directory contents:")
+			for _, f := range files {
+				name := f.Name()
+				if f.IsDir() {
+					name += "/"
+				}
+				fmt.Print("\t", name, "\n")
+			}
+
+			fmt.Println()
 
 		// feature: draft: edit commit message while staging
 		case "draft":
@@ -456,4 +510,10 @@ everywhere:
 		fmt.Println("error reading stdin:", err)
 	}
 	fmt.Println()
+}
+
+func checkErr(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
