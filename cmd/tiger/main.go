@@ -130,14 +130,31 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"strings"
 	"time"
 )
 
 const (
-	Red   = "\033[31m"
-	Green = "\033[32m"
-	Reset = "\033[0m"
+	Black     = "\033[30m"
+	Red       = "\033[31m"
+	Green     = "\033[32m"
+	Yellow    = "\033[33m"
+	Blue      = "\033[34m"
+	Magenta   = "\033[35m"
+	Cyan      = "\033[36m"
+	Grey      = "\033[37m"
+	BgBlack   = "\033[30m"
+	BgRed     = "\033[41m"
+	BgGreen   = "\033[42m"
+	BgYellow  = "\033[43m"
+	BgBlue    = "\033[44m"
+	BgMagenta = "\033[45m"
+	BgCyan    = "\033[46m"
+	BgGrey    = "\033[47m"
+	Reset     = "\033[0m"
+
+	PATH_SEPARATOR = string(os.PathSeparator)
 )
 
 type buf []byte
@@ -180,14 +197,14 @@ func println(stdout, stderr string, err error) error {
 	return err
 }
 
-func dir() (string, error) {
+func gitDir() (string, error) {
 	stdout, _, err := git("worktree", "list", "--porcelain")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimPrefix(
 		strings.TrimSpace(
-			strings.Split(stdout, "\n")[0]), "worktree ") + string(os.PathSeparator) + ".git", nil
+			strings.Split(stdout, "\n")[0]), "worktree "), nil
 }
 
 func config(param string) (string, error) {
@@ -199,11 +216,11 @@ func config(param string) (string, error) {
 }
 
 func draftFile() (string, error) {
-	dir, err := dir()
+	dir, err := gitDir()
 	if err != nil {
 		return "", err
 	}
-	return dir + string(os.PathSeparator) + "COMMIT_DRAFTMSG", nil
+	return dir + PATH_SEPARATOR + ".git" + PATH_SEPARATOR + "COMMIT_DRAFTMSG", nil
 }
 
 func fileExists(filename string) bool {
@@ -232,6 +249,11 @@ func fileGetContents(filename string) string {
 	return contents.String()
 }
 
+// I'm getting both / and \ as path separators using Git Bash for Windows...
+func normalizePathSeparators(path string) string {
+	return strings.Replace(path, "\\", "/", -1)
+}
+
 // current branch to display in prompt()
 func branch() string {
 	stdout, _, err := git("branch")
@@ -240,7 +262,7 @@ func branch() string {
 	}
 	for _, ln := range strings.Split(stdout, "\n") {
 		if strings.HasPrefix(ln, "* ") {
-			return "(" + strings.TrimPrefix(ln, "* ") + ")"
+			return strings.TrimPrefix(ln, "* ")
 		}
 	}
 	return ""
@@ -263,10 +285,26 @@ func prompt() {
 			fmt.Println(status)
 		}
 	} else {
-		fmt.Println(Red+"(not a git repository)"+Reset, "\n")
-		fmt.Println("Type \"init\" to get started!")
+		fmt.Println("\nType \"" + Blue + "init" + Reset + "\" to get started with git!")
 	}
-	fmt.Print("git", branch(), "> ")
+	// show cwd with respect to GIT_DIR
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic("unexpected error: " + err.Error())
+	}
+	cwd = normalizePathSeparators(cwd)
+	gwd, err := gitDir()
+	if err != nil {
+		// not a git repository
+		fmt.Print(Red, "(not a git repository)", Reset, " ", path.Base(cwd), " % ")
+	} else {
+		gwd = normalizePathSeparators(gwd)
+
+		repo := path.Base(gwd)
+		dir := strings.TrimPrefix(cwd, gwd)
+
+		fmt.Print(Grey, "git@", Reset, Yellow, branch(), Reset, " ", Cyan, repo, dir, Reset, " % ")
+	}
 }
 
 func main() {
@@ -296,6 +334,13 @@ everywhere:
 
 		switch strings.TrimSpace(args[0]) {
 		case "": // do nothing
+		case "cd":
+			if len(args) > 1 {
+				err := os.Chdir(strings.Join(args[1:], " "))
+				if err != nil {
+					fmt.Println(Red, err, Reset)
+				}
+			}
 		case "test":
 			cmd := exec.Command("git", "diff", "--color", "HEAD^^", "main.go")
 			// p, _ := config("core.pager")
