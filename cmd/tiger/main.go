@@ -193,11 +193,10 @@ func (c *cmd) AttachWithPipe(pipe *exec.Cmd) (err error) {
 	if err != nil {
 		return err
 	}
-	err = c.cmd.Wait()
-	if err != nil {
-		return err
-	}
-	go w.Close()
+	go func() {
+		c.cmd.Wait()
+		w.Close()
+	}()
 	return pipe.Wait()
 }
 
@@ -318,7 +317,6 @@ func prompt() {
 	gwd, err := gitDir()
 	if err != nil {
 		// not a git repository
-		fmt.Println("\nType \"" + Blue + "init" + Reset + "\" to get started with git!")
 		fmt.Print(Red, "(not a git repository)", Reset, " ", path.Base(cwd), " % ")
 		return
 	}
