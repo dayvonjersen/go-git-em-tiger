@@ -338,6 +338,29 @@ func main() {
 	signal.Notify(zig, os.Interrupt)
 	go func() { <-zig; fmt.Println(); os.Exit(0) }()
 
+	events := make(chan *event)
+	watch, err := newWatcher(events)
+	checkErr(err)
+	go dispatch(
+		events,
+		func(filename string) bool {
+			if path.Base(filename) == ".git" {
+				return false
+			}
+			return true
+		},
+		func() {
+			fmt.Println()
+			prompt()
+			// 	log.Println(BgMagenta + "[status update here]" + Reset)
+		},
+	)
+
+	watchPaths := []string{}
+	gwd, err := gitDir()
+	if err == nil {
+		watchPaths = watchAddWithSubdirs(watch, gwd)
+	}
 	// this is where you would put an annoying welcome message
 	// TODO(tso): annoying welcome message
 	prompt()
@@ -368,6 +391,15 @@ everywhere:
 				err := os.Chdir(strings.Join(args[1:], " "))
 				if err != nil {
 					fmt.Println(Red, err, Reset)
+				} else {
+					currentGwd, err := gitDir()
+					if currentGwd != gwd {
+						watchRemove(watch, watchPaths)
+					}
+					if err == nil {
+						gwd = currentGwd
+						watchPaths = watchAddWithSubdirs(watch, gwd)
+					}
 				}
 			}
 		case "cat":
