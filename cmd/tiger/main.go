@@ -398,10 +398,10 @@ everywhere:
 					currentGwd, err := gitDir()
 					if currentGwd != gwd {
 						watchRemove(watch, watchPaths)
-					}
-					if err == nil {
-						gwd = currentGwd
-						watchPaths = watchAddWithSubdirs(watch, gwd)
+						if err == nil {
+							gwd = currentGwd
+							watchPaths = watchAddWithSubdirs(watch, gwd)
+						}
 					}
 				}
 			}
