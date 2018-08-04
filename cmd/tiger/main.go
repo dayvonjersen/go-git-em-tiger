@@ -347,9 +347,12 @@ func main() {
 			if path.Base(filename) == ".git" {
 				return false
 			}
+
+			// TODO(tso): check if file is ignored before returning true
 			return true
 		},
 		func() {
+			// TODO(tso): only show if working tree has actually changed
 			fmt.Println()
 			prompt()
 			// 	log.Println(BgMagenta + "[status update here]" + Reset)
@@ -559,17 +562,49 @@ everywhere:
 
 			// feature: checkin: add everything, commit, and push
 		case "ci", "checkin":
-			if println(git("add", ".").Output()) != nil {
+			// TODO(tso): this is a massive hack right now, make it sane
+			stdout, _, err := git("status", "--porcelain").Output()
+			if err != nil {
+				println("", "", err)
 				break
 			}
+
+			modified := false
+			for _, ln := range strings.Split(stdout, "\n") {
+				if len(ln) > 0 && ln[0] != ' ' {
+					modified = true
+					break
+				}
+			}
+
+			if !modified {
+				fmt.Println("nothing has been added to the index, run \"git add .\" first?")
+				scanner.Scan()
+				answer := scanner.Text()
+				if len(answer) > 0 && (answer[0] == 'y' || answer[0] == 'Y') { // CS101 *looks at diploma in hand*
+					if println(git("add", ".").Output()) != nil {
+						fmt.Println("[ OK ]")
+						break
+					} else {
+						fmt.Println("[ abort ]")
+					}
+				} else {
+					fmt.Println("[ abort ]")
+					break
+				}
+			}
+
 			msg := strings.Join(args[1:], " ")
 			if msg == "" {
 				fmt.Println("enter commit message (optional):")
 				scanner.Scan()
 				msg = scanner.Text()
 			}
-			if println(git("commit", "--allow-empty-message", "-m", msg).Output()) == nil {
-				println(git("push").Output())
+			if println(git("commit", "--allow-empty", "--allow-empty-message", "-m", msg).Output()) == nil {
+				_, _, err := git("remote", "show", "origin").Output()
+				if err == nil {
+					println(git("push").Output())
+				}
 			}
 		case "log", "diff", "show": // things that use the pager XXX INCOMPLETE
 			args = append(args[:1], append([]string{"--color"}, args[1:]...)...)
