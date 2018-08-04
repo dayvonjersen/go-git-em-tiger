@@ -571,7 +571,7 @@ everywhere:
 
 			modified := false
 			for _, ln := range strings.Split(stdout, "\n") {
-				if len(ln) > 0 && ln[0] != ' ' {
+				if len(ln) > 0 && ln[0] != ' ' && ln[0] != '?' {
 					modified = true
 					break
 				}
