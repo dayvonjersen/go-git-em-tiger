@@ -344,6 +344,7 @@ func main() {
 	go dispatch(
 		events,
 		func(filename string) bool {
+			return false // XXX TEMPORARY
 			if path.Base(filename) == ".git" {
 				return false
 			}
@@ -577,24 +578,28 @@ everywhere:
 				}
 			}
 
+			var answer string
 			if !modified {
-				fmt.Println("nothing has been added to the index, run \"git add .\" first?")
+				fmt.Println(Cyan + "git add ." + Reset + " first? [if you don't type \"no\" I'm going to do it anyway]")
 				scanner.Scan()
-				answer := scanner.Text()
-				if len(answer) > 0 && (answer[0] == 'y' || answer[0] == 'Y') { // CS101 *looks at diploma in hand*
-					if println(git("add", ".").Output()) != nil {
-						fmt.Println("[ OK ]")
-						break
-					} else {
-						fmt.Println("[ abort ]")
-					}
-				} else {
-					fmt.Println("[ abort ]")
+				answer = scanner.Text()
+				if strings.ToLower(answer) == "no" {
+					fmt.Println("[" + BgRed + " abort " + Reset + "]")
 					break
+				} else {
+					if println(git("add", ".").Output()) == nil {
+						fmt.Println("[ " + Green + "OK" + Reset + " ]")
+					} else {
+						fmt.Println("[" + BgRed + " abort " + Reset + "]")
+						break
+					}
 				}
 			}
 
 			msg := strings.Join(args[1:], " ")
+			if msg == "" {
+				msg = answer
+			}
 			if msg == "" {
 				fmt.Println("enter commit message (optional):")
 				scanner.Scan()
