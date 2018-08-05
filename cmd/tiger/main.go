@@ -116,6 +116,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -294,17 +295,26 @@ func normalizePathSeparators(path string) string {
 }
 
 // current branch to display in prompt()
+// TODO(tso): tags???
 func branch() string {
-	stdout, _, err := git("branch").Output()
+	stdout, _, err := git("rev-parse", "--symbolic-full-name", "HEAD").Output()
 	if err != nil {
 		return ""
 	}
-	for _, ln := range strings.Split(stdout, "\n") {
-		if strings.HasPrefix(ln, "* ") {
-			return strings.TrimPrefix(ln, "* ")
+
+	head := strings.TrimSpace(stdout)
+
+	if head == "HEAD" {
+		stdout, _, err := git("rev-parse", "--short", "HEAD").Output()
+		if err == nil {
+			return strings.TrimSpace(stdout)
+		} else {
+			log.Println(Red + "Error: couldn't determine branch ..." + Reset)
+			return ""
 		}
 	}
-	return ""
+
+	return strings.TrimPrefix(head, "refs/heads/")
 }
 
 func prompt() {
@@ -423,7 +433,6 @@ everywhere:
 			}
 		case "cat":
 			// TODO(tso): this could use a lot of improvements
-			// - don't rely on branch() cause it can print "(HEAD detached at bad1dea)"
 			// - resolve relative filepaths
 			// - make it clear somehow that this is not real cat
 
@@ -467,7 +476,6 @@ everywhere:
 			}
 		case "ls":
 			// TODO(tso): this could use a lot of improvements
-			// - don't rely on branch() cause it can print "(HEAD detached at bad1dea)"
 			// - columns?
 			// - sorting
 			// - list directories first
