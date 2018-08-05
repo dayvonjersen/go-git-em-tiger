@@ -341,10 +341,15 @@ func main() {
 	events := make(chan *event)
 	watch, err := newWatcher(events)
 	checkErr(err)
+
+	difflast := ""
+	stdout, _, err := git("diff", "--numstat").Output()
+	if err == nil {
+		difflast = strings.TrimSpace(stdout)
+	}
 	go dispatch(
 		events,
 		func(filename string) bool {
-			return false // XXX TEMPORARY
 			if path.Base(filename) == ".git" {
 				return false
 			}
@@ -353,7 +358,12 @@ func main() {
 			return true
 		},
 		func() {
-			// TODO(tso): only show if working tree has actually changed
+			stdout, _, err := git("diff", "--numstat").Output()
+			diff := strings.TrimSpace(stdout)
+			if err != nil || diff == difflast {
+				return
+			}
+			difflast = diff
 			fmt.Println()
 			prompt()
 			// 	log.Println(BgMagenta + "[status update here]" + Reset)
@@ -396,6 +406,11 @@ everywhere:
 				if err != nil {
 					fmt.Println(Red, err, Reset)
 				} else {
+					difflast = ""
+					stdout, _, err := git("diff", "--numstat").Output()
+					if err == nil {
+						difflast = strings.TrimSpace(stdout)
+					}
 					currentGwd, err := gitDir()
 					if currentGwd != gwd {
 						watchRemove(watch, watchPaths)
