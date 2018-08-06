@@ -98,7 +98,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -152,9 +151,7 @@ func gitDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimPrefix(
-		strings.TrimSpace(
-			strings.Split(stdout, "\n")[0]), "worktree "), nil
+	return strings.TrimPrefix(strings.TrimSpace(strings.Split(stdout, "\n")[0]), "worktree "), nil
 }
 
 func config(param string) (string, error) {
@@ -201,38 +198,25 @@ func branch() string {
 
 func status() {
 	stat, _, err := git("status", "--porcelain").Output()
-	if err != nil {
+	stat = strings.TrimSuffix(stat, "\n")
+	if err != nil || stat == "" {
 		return
 	}
-	diff, _, err := git("diff", "--numstat").Output()
-	if err != nil {
-		return
-	}
-	diffHEAD, _, err := git("diff", "--numstat", "HEAD").Output()
-	if err != nil {
-		return
-	}
-	stat = strings.TrimSuffix(stat, "\n\n")
-	diff = strings.TrimSuffix(diff, "\n\n")
-	diffHEAD = strings.TrimSuffix(diffHEAD, "\n\n")
 
 	type statusDiff struct {
 		renamed, deleted   bool
 		untracked, ignored bool
 		plus, minus        int
 	}
-	staged := map[string]*statusDiff{}
-	unstaged := map[string]*statusDiff{}
+	staged := map[string]statusDiff{}
+	unstaged := map[string]statusDiff{}
 	for _, ln := range strings.Split(stat, "\n") {
-		if ln == "" {
-			continue
-		}
 		name := ln[3:]
 
 		x := ln[0]
 		y := ln[1]
 
-		diff := &statusDiff{
+		diff := statusDiff{
 			renamed:   x == 'R',
 			deleted:   x == 'D',
 			untracked: x == '?' || y == '?',
@@ -247,89 +231,67 @@ func status() {
 		}
 	}
 
-	for _, ln := range strings.Split(diff, "\n") {
-		if ln == "" {
-			continue
+	parseDiff := func(_diff string, m map[string]statusDiff) map[string]statusDiff {
+		if _diff == "" {
+			return m
 		}
-		parts := strings.Split(ln, "\t")
-		if len(parts) != 3 {
-			log.Printf("couldn't parse line: %#v", ln)
-			return
-		}
-		name := parts[2]
-		s, ok := unstaged[name]
-		if !ok {
-			continue
-		}
-		s.plus, _ = strconv.Atoi(parts[0])
-		s.minus, _ = strconv.Atoi(parts[1])
-	}
-
-	for _, ln := range strings.Split(diffHEAD, "\n") {
-		if ln == "" {
-			continue
-		}
-		parts := strings.Split(ln, "\t")
-		if len(parts) != 3 {
-			log.Printf("couldn't parse line: %#v", ln)
-			return
-		}
-		name := parts[2]
-		s, ok := staged[name]
-		if !ok {
-			continue
-		}
-		s.plus, _ = strconv.Atoi(parts[0])
-		s.minus, _ = strconv.Atoi(parts[1])
-	}
-
-	// log.Printf("raw: %#v", stat)
-	// log.Printf("staged: %#v", staged)
-	// log.Printf("unstaged: %#v", unstaged)
-	if len(staged) > 0 {
-		// gee I sure love maps
-		names := []string{}
-		for name := range staged {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			if s, ok := staged[name]; ok {
-				diff := ""
-				if s.plus != 0 && s.minus != 0 {
-					diff = fmt.Sprintf("%s+%d%s/%s-%d%s", Green, s.plus, Reset, Red, s.minus, Reset)
-				}
-				color := Green
-				if s.deleted {
-					color = Red
-				}
-				fmt.Println(color+name+Reset, diff)
+		for _, ln := range strings.Split(_diff, "\n") {
+			parts := strings.Split(ln, "\t")
+			name := parts[2]
+			s, ok := m[name]
+			if !ok {
+				continue
 			}
+			s.plus, _ = strconv.Atoi(parts[0])
+			s.minus, _ = strconv.Atoi(parts[1])
+			m[name] = s
 		}
+		return m
 	}
+
 	if len(unstaged) > 0 {
-		// gee I sure love maps
+		diff, _, err := git("diff", "--numstat").Output()
+		checkErr(err) // (not a git repository) should have been caught already
+		diff = strings.TrimSuffix(diff, "\n")
+		unstaged = parseDiff(diff, unstaged)
+	}
+
+	if len(staged) > 0 {
+		diffHEAD, _, err := git("diff", "--numstat", "HEAD").Output()
+		checkErr(err) // (not a git repository) should have been caught already
+		diffHEAD = strings.TrimSuffix(diffHEAD, "\n")
+		staged = parseDiff(diffHEAD, staged)
+	}
+
+	sortMapKeys := func(m map[string]statusDiff) []string {
 		names := []string{}
-		for name := range unstaged {
+		for name := range m {
 			names = append(names, name)
 		}
 		sort.Strings(names)
-		for _, name := range names {
-			if s, ok := unstaged[name]; ok {
-				diff := ""
-				if s.plus != 0 && s.minus != 0 {
-					diff = fmt.Sprintf("%s+%d%s/%s-%d%s", Green, s.plus, Reset, Red, s.minus, Reset)
-				}
-				color := Black + BgGrey
-				if s.deleted {
-					color = BgRed
-				}
-				if s.untracked {
-					color = "untracked: " + color
-				}
-				fmt.Println(color+name+Reset, diff)
-			}
+		return names
+	}
+
+	println := func(color, delcolor, name string, s statusDiff) {
+		diff := ""
+		if s.plus != 0 && s.minus != 0 {
+			diff = fmt.Sprintf("%s+%d%s/%s-%d%s", Green, s.plus, Reset, Red, s.minus, Reset)
 		}
+		if s.deleted {
+			color = delcolor
+		}
+		if s.untracked {
+			color = "untracked: " + color
+		}
+		fmt.Println(color+name+Reset, diff)
+	}
+
+	for _, name := range sortMapKeys(staged) {
+		println(Green, Red, name, staged[name])
+	}
+
+	for _, name := range sortMapKeys(unstaged) {
+		println(Black+BgGrey, BgRed, name, unstaged[name])
 	}
 }
 
