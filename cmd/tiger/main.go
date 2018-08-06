@@ -468,17 +468,13 @@ func main() {
 	signal.Notify(zig, os.Interrupt)
 	go func() { <-zig; fmt.Println(); os.Exit(0) }()
 
-	events := make(chan *event)
-	watch, err := newWatcher(events)
-	checkErr(err)
-
 	difflast := ""
 	stdout, _, err := git("diff", "--numstat").Output()
 	if err == nil {
 		difflast = strings.TrimSpace(stdout)
 	}
-	go dispatch(
-		events,
+
+	watch, err := newWatcher(
 		func(filename string) bool {
 			if path.Base(filename) == ".git" {
 				return false
@@ -499,11 +495,11 @@ func main() {
 			// 	log.Println(BgMagenta + "[status update here]" + Reset)
 		},
 	)
+	checkErr(err)
 
-	watchPaths := []string{}
 	gwd, err := gitDir()
 	if err == nil {
-		watchPaths = watchAddWithSubdirs(watch, gwd)
+		watch.AddWithSubdirs(gwd)
 	}
 	// this is where you would put an annoying welcome message
 	// TODO(tso): annoying welcome message
@@ -543,10 +539,10 @@ everywhere:
 					}
 					currentGwd, err := gitDir()
 					if currentGwd != gwd {
-						watchRemove(watch, watchPaths)
+						watch.RemoveAll()
 						if err == nil {
 							gwd = currentGwd
-							watchPaths = watchAddWithSubdirs(watch, gwd)
+							watch.AddWithSubdirs(gwd)
 						}
 					}
 				}

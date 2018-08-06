@@ -15,13 +15,55 @@ type event struct {
 	t        time.Time
 }
 
-func dispatch(events chan *event, validator func(string) bool, callback func()) {
+type watcher struct {
+	w         *fsnotify.Watcher
+	paths     []string
+	events    chan *event
+	validator func(string) bool
+	callback  func()
+}
+
+func newWatcher(validator func(string) bool, callback func()) (*watcher, error) {
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+
+	watch := &watcher{
+		w:         w,
+		paths:     []string{},
+		events:    make(chan *event),
+		validator: validator,
+		callback:  callback,
+	}
+
+	go watch.relay()
+	go watch.dispatch()
+
+	return watch, nil
+}
+
+func (w *watcher) relay() {
+	for {
+		select {
+		case e := <-w.w.Events:
+			w.events <- &event{
+				filename: normalizePathSeparators(e.Name),
+				t:        time.Now(),
+			}
+		case err := <-w.w.Errors:
+			checkErr(err)
+		}
+	}
+}
+
+func (w *watcher) dispatch() {
 	var last time.Time
-	for e := range events {
+	for e := range w.events {
 		diff := time.Since(last) - time.Since(e.t)
 		last = e.t
 		// log.Println("got:", path.Base(e.filename), diff)
-		if !validator(e.filename) {
+		if !w.validator(e.filename) {
 			// log.Println("file is not valid,          skipping...")
 			continue
 		}
@@ -29,57 +71,27 @@ func dispatch(events chan *event, validator func(string) bool, callback func()) 
 			// log.Println("last event was < 100ms ago, skipping...")
 			continue
 		}
-		go callback()
+		go w.callback()
 	}
 }
 
-func newWatcher(events chan *event) (*fsnotify.Watcher, error) {
-	w, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, err
-	}
-
-	go func() {
-		for {
-			select {
-			case e := <-w.Events:
-				events <- &event{
-					filename: normalizePathSeparators(e.Name),
-					t:        time.Now(),
-				}
-			case err := <-w.Errors:
-				checkErr(err)
-			}
-		}
-	}()
-
-	return w, nil
-}
-
-func watchAddWithSubdirs(w *fsnotify.Watcher, watchDir string) (watchPaths []string) {
-	watchPaths = []string{}
-
-	watchPath := func(path string) {
-		path = normalizePathSeparators(path)
-		// log.Println("watching", path)
-		watchPaths = append(watchPaths, path)
-		checkErr(w.Add(path))
-	}
-
-	filepath.Walk(watchDir, func(path string, info os.FileInfo, err error) error {
+func (w *watcher) AddWithSubdirs(dir string) {
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() && !strings.Contains(path, ".git") {
-			watchPath(path)
+			path = normalizePathSeparators(path)
+			// log.Println("watching", path)
+			w.paths = append(w.paths, path)
+			checkErr(w.w.Add(path))
 		}
 		return err
 	})
-
-	return watchPaths
 }
 
-func watchRemove(w *fsnotify.Watcher, watchPaths []string) {
-	for _, path := range watchPaths {
-		if err := w.Remove(path); err != nil {
+func (w *watcher) RemoveAll() {
+	for _, path := range w.paths {
+		if err := w.w.Remove(path); err != nil {
 			log.Println(err)
 		}
 	}
+	w.paths = []string{}
 }
