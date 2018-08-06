@@ -334,8 +334,9 @@ func summary() {
 	authors, _, err := git("shortlog", "-s").Output()
 	checkErr(err)
 
-	fmt.Print(lastCommit)
-	fmt.Printf(
+	tw := newTabwriter(os.Stdout)
+	fmt.Fprint(tw, lastCommit)
+	fmt.Fprintf(tw,
 		"commits: %d branches: %d contributors: %d\n",
 		strings.Count(commits, "\n"),
 		strings.Count(branches, "\n"),
@@ -351,10 +352,10 @@ func summary() {
 		checkErr(err)
 		checkErr(json.Unmarshal([]byte(data), &l))
 		for _, l := range l {
-			fmt.Printf("%s: %.2f%% ", l.Language, l.Percent)
+			fmt.Fprintf(tw, "%s: %.2f%% ", l.Language, l.Percent)
 		}
-		fmt.Println()
 	}
+	tw.Flush()
 }
 
 func main() {
