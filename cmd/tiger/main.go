@@ -199,7 +199,7 @@ func branch() string {
 func status() {
 	stat, _, err := git("status", "--porcelain").Output()
 	stat = strings.TrimSuffix(stat, "\n")
-	if err != nil || stat == "" {
+	if err != nil || stat == "" { // (not a git repo) or "on working directory clean"
 		return
 	}
 
@@ -208,8 +208,10 @@ func status() {
 		untracked, ignored bool
 		plus, minus        int
 	}
+
 	staged := map[string]statusDiff{}
 	unstaged := map[string]statusDiff{}
+
 	for _, ln := range strings.Split(stat, "\n") {
 		name := ln[3:]
 
@@ -319,6 +321,27 @@ func prompt() {
 	fmt.Print(Grey, "git@", Reset, Yellow, branch(), Reset, " ", Cyan, repo, cwd, Reset, " % ")
 }
 
+func summary() {
+	lastCommit, _, err := git("log", "-1", "--pretty=%h %an: %s %cr").Output()
+	if err != nil {
+		return
+	}
+	commits, _, err := git("rev-list", "HEAD").Output()
+	checkErr(err)
+	branches, _, err := git("branch").Output()
+	checkErr(err)
+	authors, _, err := git("shortlog", "-s").Output()
+	checkErr(err)
+
+	fmt.Print(lastCommit)
+	fmt.Printf(
+		"commits: %d branches: %d contributors: %d\n",
+		strings.Count(commits, "\n"),
+		strings.Count(branches, "\n"),
+		strings.Count(authors, "\n"),
+	)
+}
+
 func main() {
 	// for great justice
 	zig := make(chan os.Signal, 1)
@@ -385,6 +408,9 @@ everywhere:
 		case "exit", "quit":
 			break everywhere
 
+		case "summary": // github-style summary
+			summary()
+
 		// reinventing coreutils poorly
 		case "cd":
 			if len(args) > 1 {
@@ -408,7 +434,7 @@ everywhere:
 						watch.RemoveAll()
 						if err == nil {
 							gwd = currentGwd
-							watch.AddWithSubdirs(gwd)
+							go watch.AddWithSubdirs(gwd)
 						}
 					}
 				}
