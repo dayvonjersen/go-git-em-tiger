@@ -335,9 +335,7 @@ func status() {
 
 func prompt() {
 	cwd, err := os.Getwd()
-	if err != nil {
-		panic("unexpected error: " + err.Error())
-	}
+	checkErr(err)
 	cwd = normalizePathSeparators(cwd)
 
 	gwd, err := gitDir()
@@ -349,6 +347,7 @@ func prompt() {
 	gwd = normalizePathSeparators(gwd)
 
 	repo := path.Base(gwd)
+
 	// show cwd with respect to GIT_DIR
 	cwd = strings.TrimPrefix(cwd, gwd)
 
@@ -395,7 +394,7 @@ func main() {
 
 	gwd, err := gitDir()
 	if err == nil {
-		watch.AddWithSubdirs(gwd)
+		go watch.AddWithSubdirs(gwd)
 	}
 	// this is where you would put an annoying welcome message
 	// TODO(tso): annoying welcome message
