@@ -654,9 +654,6 @@ everywhere:
 					println(git("push").Output())
 				}
 			}
-		case "log", "diff", "show": // things that use the pager XXX INCOMPLETE
-			args = append(args[:1], append([]string{"--color"}, args[1:]...)...)
-			git(args...).AttachWithPipe(pager())
 		default: // treat all other git commands as usual
 			git(args...).Attach()
 		}
