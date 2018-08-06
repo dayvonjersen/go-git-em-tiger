@@ -1,5 +1,6 @@
 /*
 TODO(tso):
+ - rm [-r] [WILDCARD] that doesn't fail miserably for hidden files
  - config (no args): --list
     - separate global, local, system
     - align around =
@@ -57,21 +58,9 @@ TODO(tso):
 
     maybe numbered options in addition to letters?
 
- - rm [WILDCARD] that doesn't fail miserably
- - auto-update status using inotify/fswatch
-    - we could also periodically ping origin with fetch --dry-run but let's not get ahead of ourselves
-    - any of this automatic stuff should not interrupt the user while typing
-      but that's unavoidable without manipulating the terminal to insert a line
-      and reprint what the user has already typed in e.g.
+ - periodically ping origin with fetch --dry-run
 
-      git(master)> commit -m add feature foo to
       origin(git@github.com:octocat/octoverse) 1 new commit! 2018-08-01 02:30:43a
-      git(master)> commit -m add feature foo to wait ^C
-      git(master)> pull
-      blabla your branch is now even with origin/master
-      git(master)> commit ...
-
- - add diff --stat to status
 
  see README.txt for more features to implement
 
@@ -79,21 +68,15 @@ NOTE(tso): things that will lead to trouble so we shouldn't do right now/ever:
  - password prompts
 
 NOTE(tso): things that are possible thanks to one stackoverflow and their use of stty
-           and a bradfitz post on golang-nuts from 2012 that i forgot about
- - password prompts
 
  ...we can read stdin 1 char at a time now! which means
     - delete non-printing characters
     - buffer line currently being typed and reprint if interrupted by status/fetch update (async event)
-
- and the following are now possible:
-
-read -n 1
- - tab-complete without hitting enter
- - ctrl+d, bash/emacs bindings ctrl+a ctrl+e ctrl+u
-    - I don't even know all of them I just know those ._.
- - be able to print to screen for async events
-   without disrupting what a user is currently typing
+    - tab-complete without hitting enter
+    - ctrl+d, bash/emacs bindings ctrl+a ctrl+e ctrl+u ctrl+l
+       - I don't even know all of them I just know those ._.
+    - be able to print to screen for async events
+      without disrupting what a user is currently typing
 
 NOTE(tso): still not possible:
  - prevent ctrl+c from exiting immediately
@@ -175,6 +158,7 @@ func (c *cmd) Output() (stdout, stderr string, err error) {
 }
 
 func (c *cmd) Attach() (err error) {
+	// shoutouts to bradfitz for a post on golang-nuts from 2012
 	c.cmd.Stdin = os.Stdin
 	c.cmd.Stdout = os.Stdout
 	c.cmd.Stderr = os.Stderr
