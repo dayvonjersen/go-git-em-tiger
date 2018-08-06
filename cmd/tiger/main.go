@@ -97,6 +97,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -340,6 +341,20 @@ func summary() {
 		strings.Count(branches, "\n"),
 		strings.Count(authors, "\n"),
 	)
+	hasL, _, err := newCmd("which", "l").Output()
+	if hasL != "" && err == nil {
+		l := []struct {
+			Language string
+			Percent  float64
+		}{}
+		data, _, err := newCmd("l", "-json", "-limit", "3").Output()
+		checkErr(err)
+		checkErr(json.Unmarshal([]byte(data), &l))
+		for _, l := range l {
+			fmt.Printf("%s: %.2f%% ", l.Language, l.Percent)
+		}
+		fmt.Println()
+	}
 }
 
 func main() {
