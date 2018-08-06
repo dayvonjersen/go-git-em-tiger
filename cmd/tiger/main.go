@@ -98,7 +98,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -111,81 +110,8 @@ import (
 )
 
 const (
-	Black     = "\033[30m"
-	Red       = "\033[31m"
-	Green     = "\033[32m"
-	Yellow    = "\033[33m"
-	Blue      = "\033[34m"
-	Magenta   = "\033[35m"
-	Cyan      = "\033[36m"
-	Grey      = "\033[37m"
-	BgBlack   = "\033[30m"
-	BgRed     = "\033[41m"
-	BgGreen   = "\033[42m"
-	BgYellow  = "\033[43m"
-	BgBlue    = "\033[44m"
-	BgMagenta = "\033[45m"
-	BgCyan    = "\033[46m"
-	BgGrey    = "\033[47m"
-	Reset     = "\033[0m"
-
 	PATH_SEPARATOR = string(os.PathSeparator)
 )
-
-type buf []byte
-
-func (b *buf) Write(p []byte) (n int, err error) {
-	*b = append(*b, p...)
-	return len(p), nil
-}
-
-func (b *buf) String() string { return string(*b) }
-
-type cmd struct {
-	cmd *exec.Cmd
-}
-
-func newCmd(command string, args ...string) *cmd {
-	return &cmd{exec.Command(command, args...)}
-}
-
-func (c *cmd) Output() (stdout, stderr string, err error) {
-	o, e := &buf{}, &buf{}
-	c.cmd.Stdout = o
-	c.cmd.Stderr = e
-	err = c.cmd.Run()
-	return o.String(), e.String(), err
-}
-
-func (c *cmd) Attach() (err error) {
-	// shoutouts to bradfitz for a post on golang-nuts from 2012
-	c.cmd.Stdin = os.Stdin
-	c.cmd.Stdout = os.Stdout
-	c.cmd.Stderr = os.Stderr
-	return c.cmd.Run()
-}
-
-func (c *cmd) AttachWithPipe(pipe *exec.Cmd) (err error) {
-	r, w := io.Pipe()
-	c.cmd.Stdout = w
-	pipe.Stdin = r
-	pipe.Stdout = os.Stdout
-
-	// NOTE(tso): yes I know about errWriter and stickyErr but I don't remember how to do them
-	err = c.cmd.Start()
-	if err != nil {
-		return err
-	}
-	err = pipe.Start()
-	if err != nil {
-		return err
-	}
-	go func() {
-		c.cmd.Wait()
-		w.Close()
-	}()
-	return pipe.Wait()
-}
 
 func git(args ...string) *cmd {
 	return newCmd("git", args...)
@@ -247,37 +173,6 @@ func draftFile() (string, error) {
 		return "", err
 	}
 	return dir + PATH_SEPARATOR + ".git" + PATH_SEPARATOR + "COMMIT_DRAFTMSG", nil
-}
-
-func fileExists(filename string) bool {
-	f, err := os.Open(filename)
-	f.Close()
-	if os.IsNotExist(err) {
-		return false
-	}
-	if err != nil {
-		panic(err)
-	}
-	return true
-}
-
-func fileGetContents(filename string) string {
-	contents := &buf{}
-	f, err := os.Open(filename)
-	if err != nil {
-		panic(err)
-	}
-	_, err = io.Copy(contents, f)
-	f.Close()
-	if err != nil && err != io.EOF {
-		panic(err)
-	}
-	return contents.String()
-}
-
-// I'm getting both / and \ as path separators using Git Bash for Windows...
-func normalizePathSeparators(path string) string {
-	return strings.Replace(path, "\\", "/", -1)
 }
 
 // current branch to display in prompt()
@@ -763,10 +658,4 @@ everywhere:
 		fmt.Println("error reading stdin:", err)
 	}
 	fmt.Println()
-}
-
-func checkErr(err error) {
-	if err != nil {
-		panic(err)
-	}
 }
