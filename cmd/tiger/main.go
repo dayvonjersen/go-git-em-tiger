@@ -119,9 +119,7 @@ func git(args ...string) *cmd {
 
 func pager() *exec.Cmd {
 	p, err := config("core.pager")
-	if err != nil {
-		panic(err)
-	}
+	checkErr(err)
 	// NOTE(tso): core.pager can have any arbitrary shell syntax
 	//            e.g.(mine right now): diff-so-fancy | less -RFX
 	//            rather than try to reinvent bash just to be able to
@@ -176,26 +174,29 @@ func draftFile() (string, error) {
 }
 
 // current branch to display in prompt()
-// TODO(tso): tags???
+// TODO(tso): orphan branches and empty repositories,
+//            consider renaming this function to head()
 func branch() string {
 	stdout, _, err := git("rev-parse", "--symbolic-full-name", "HEAD").Output()
 	if err != nil {
 		return ""
 	}
+	revParse := strings.TrimSpace(stdout)
 
-	head := strings.TrimSpace(stdout)
-
-	if head == "HEAD" {
-		stdout, _, err := git("rev-parse", "--short", "HEAD").Output()
-		if err == nil {
-			return strings.TrimSpace(stdout)
-		} else {
-			log.Println(Red + "Error: couldn't determine branch ..." + Reset)
+	if revParse == "HEAD" {
+		//stdout, _, err := git("rev-parse", "--short", "HEAD").Output()
+		stdout, _, err = git("name-rev", "HEAD").Output()
+		if err != nil {
 			return ""
 		}
+		nameRev := strings.TrimSpace(stdout)
+		nameRev = strings.TrimPrefix(nameRev, "HEAD ")
+		nameRev = strings.TrimPrefix(nameRev, "tags/")
+		return nameRev
 	}
+	revParse = strings.TrimPrefix(revParse, "refs/heads/")
 
-	return strings.TrimPrefix(head, "refs/heads/")
+	return revParse
 }
 
 func status() {
