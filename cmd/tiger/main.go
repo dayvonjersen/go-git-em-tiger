@@ -277,7 +277,7 @@ func status() {
 
 	println := func(color, delcolor, name string, s statusDiff) {
 		diff := ""
-		if s.plus != 0 && s.minus != 0 {
+		if !(s.plus == 0 && s.minus == 0) {
 			diff = fmt.Sprintf("%s+%d%s/%s-%d%s", Green, s.plus, Reset, Red, s.minus, Reset)
 		}
 		if s.deleted {
