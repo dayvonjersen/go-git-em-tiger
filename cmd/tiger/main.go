@@ -392,6 +392,9 @@ func main() {
 	)
 	checkErr(err)
 
+	lastCwd, err := os.Getwd()
+	checkErr(err)
+
 	gwd, err := gitDir()
 	if err == nil {
 		go watch.AddWithSubdirs(gwd)
@@ -423,7 +426,13 @@ everywhere:
 		// reinventing coreutils poorly
 		case "cd":
 			if len(args) > 1 {
-				err := os.Chdir(strings.Join(args[1:], " "))
+				cd := strings.Join(args[1:], " ")
+				if cd == "-" {
+					cd = lastCwd
+				}
+				lastCwd, err = os.Getwd()
+				checkErr(err)
+				err := os.Chdir(cd)
 				if err != nil {
 					fmt.Println(Red, err, Reset)
 				} else {
