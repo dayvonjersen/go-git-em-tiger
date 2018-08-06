@@ -121,6 +121,8 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -317,6 +319,140 @@ func branch() string {
 	return strings.TrimPrefix(head, "refs/heads/")
 }
 
+func status() {
+	stat, _, err := git("status", "--porcelain").Output()
+	if err != nil {
+		return
+	}
+	diff, _, err := git("diff", "--numstat").Output()
+	if err != nil {
+		return
+	}
+	diffHEAD, _, err := git("diff", "--numstat", "HEAD").Output()
+	if err != nil {
+		return
+	}
+	stat = strings.TrimSuffix(stat, "\n\n")
+	diff = strings.TrimSuffix(diff, "\n\n")
+	diffHEAD = strings.TrimSuffix(diffHEAD, "\n\n")
+
+	type statusDiff struct {
+		renamed, deleted   bool
+		untracked, ignored bool
+		plus, minus        int
+	}
+	staged := map[string]*statusDiff{}
+	unstaged := map[string]*statusDiff{}
+	for _, ln := range strings.Split(stat, "\n") {
+		if ln == "" {
+			continue
+		}
+		name := ln[3:]
+
+		x := ln[0]
+		y := ln[1]
+
+		diff := &statusDiff{
+			renamed:   x == 'R',
+			deleted:   x == 'D',
+			untracked: x == '?' || y == '?',
+			ignored:   x == '!' || y == '!',
+		}
+
+		if x == '?' || y != ' ' {
+			unstaged[name] = diff
+		}
+		if x != '?' && x != ' ' {
+			staged[name] = diff
+		}
+	}
+
+	for _, ln := range strings.Split(diff, "\n") {
+		if ln == "" {
+			continue
+		}
+		parts := strings.Split(ln, "\t")
+		if len(parts) != 3 {
+			log.Printf("couldn't parse line: %#v", ln)
+			return
+		}
+		name := parts[2]
+		s, ok := unstaged[name]
+		if !ok {
+			continue
+		}
+		s.plus, _ = strconv.Atoi(parts[0])
+		s.minus, _ = strconv.Atoi(parts[1])
+	}
+
+	for _, ln := range strings.Split(diffHEAD, "\n") {
+		if ln == "" {
+			continue
+		}
+		parts := strings.Split(ln, "\t")
+		if len(parts) != 3 {
+			log.Printf("couldn't parse line: %#v", ln)
+			return
+		}
+		name := parts[2]
+		s, ok := staged[name]
+		if !ok {
+			continue
+		}
+		s.plus, _ = strconv.Atoi(parts[0])
+		s.minus, _ = strconv.Atoi(parts[1])
+	}
+
+	// log.Printf("raw: %#v", stat)
+	// log.Printf("staged: %#v", staged)
+	// log.Printf("unstaged: %#v", unstaged)
+	if len(staged) > 0 {
+		// gee I sure love maps
+		names := []string{}
+		for name := range staged {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			if s, ok := staged[name]; ok {
+				diff := ""
+				if s.plus != 0 && s.minus != 0 {
+					diff = fmt.Sprintf("%s+%d%s/%s-%d%s", Green, s.plus, Reset, Red, s.minus, Reset)
+				}
+				color := Green
+				if s.deleted {
+					color = Red
+				}
+				fmt.Println(color+name+Reset, diff)
+			}
+		}
+	}
+	if len(unstaged) > 0 {
+		// gee I sure love maps
+		names := []string{}
+		for name := range unstaged {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			if s, ok := unstaged[name]; ok {
+				diff := ""
+				if s.plus != 0 && s.minus != 0 {
+					diff = fmt.Sprintf("%s+%d%s/%s-%d%s", Green, s.plus, Reset, Red, s.minus, Reset)
+				}
+				color := Black + BgGrey
+				if s.deleted {
+					color = BgRed
+				}
+				if s.untracked {
+					color = "untracked: " + color
+				}
+				fmt.Println(color+name+Reset, diff)
+			}
+		}
+	}
+}
+
 func prompt() {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -332,12 +468,12 @@ func prompt() {
 	}
 	gwd = normalizePathSeparators(gwd)
 
-	// always show working tree status first
-	git("status", "-s", "-uall").Attach()
-
 	repo := path.Base(gwd)
 	// show cwd with respect to GIT_DIR
 	cwd = strings.TrimPrefix(cwd, gwd)
+
+	// always show working tree status first
+	status()
 
 	fmt.Print(Grey, "git@", Reset, Yellow, branch(), Reset, " ", Cyan, repo, cwd, Reset, " % ")
 }
