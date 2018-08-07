@@ -171,22 +171,29 @@ func draftFile() (string, error) {
 	return dir + PATH_SEPARATOR + ".git" + PATH_SEPARATOR + "COMMIT_DRAFTMSG", nil
 }
 
-// current branch to display in prompt()
-// TODO(tso): orphan branches and empty repositories,
-//            consider renaming this function to head()
-func branch() string {
-	stdout, _, err := git("rev-parse", "--symbolic-full-name", "HEAD").Output()
+// current branch/tag to display in prompt()
+func head() string {
+	dir, err := gitDir()
 	if err != nil {
 		return ""
 	}
+
+	head := fileGetContents(dir + PATH_SEPARATOR + ".git" + PATH_SEPARATOR + "HEAD")
+	checkErr(err)
+
+	if strings.HasPrefix(head, "ref: refs/heads/") {
+		return strings.TrimSpace(strings.TrimPrefix(head, "ref: refs/heads/"))
+	}
+
+	stdout, _, err := git("rev-parse", "--symbolic-full-name", "HEAD").Output()
+	checkErr(err)
+
 	revParse := strings.TrimSpace(stdout)
 
 	if revParse == "HEAD" {
-		//stdout, _, err := git("rev-parse", "--short", "HEAD").Output()
 		stdout, _, err = git("name-rev", "HEAD").Output()
-		if err != nil {
-			return ""
-		}
+		checkErr(err)
+
 		nameRev := strings.TrimSpace(stdout)
 		nameRev = strings.TrimPrefix(nameRev, "HEAD ")
 		nameRev = strings.TrimPrefix(nameRev, "tags/")
@@ -254,16 +261,18 @@ func status() {
 
 	if len(unstaged) > 0 {
 		diff, _, err := git("diff", "--numstat").Output()
-		checkErr(err) // (not a git repository) should have been caught already
-		diff = strings.TrimSuffix(diff, "\n")
-		unstaged = parseDiff(diff, unstaged)
+		if err == nil {
+			diff = strings.TrimSuffix(diff, "\n")
+			unstaged = parseDiff(diff, unstaged)
+		}
 	}
 
 	if len(staged) > 0 {
 		diffHEAD, _, err := git("diff", "--numstat", "HEAD").Output()
-		checkErr(err) // (not a git repository) should have been caught already
-		diffHEAD = strings.TrimSuffix(diffHEAD, "\n")
-		staged = parseDiff(diffHEAD, staged)
+		if err == nil {
+			diffHEAD = strings.TrimSuffix(diffHEAD, "\n")
+			staged = parseDiff(diffHEAD, staged)
+		}
 	}
 
 	sortMapKeys := func(m map[string]statusDiff) []string {
@@ -319,7 +328,7 @@ func prompt() {
 	// always show working tree status first
 	status()
 
-	fmt.Print(Grey, "git@", Reset, Yellow, branch(), Reset, " ", Cyan, repo, cwd, Reset, " % ")
+	fmt.Print(Grey, "git@", Reset, Yellow, head(), Reset, " ", Cyan, repo, cwd, Reset, " % ")
 }
 
 func summary() {
@@ -470,7 +479,7 @@ everywhere:
 				treeish = args[1]
 				filename = strings.Join(args[2:], " ")
 			} else {
-				treeish = branch()
+				treeish = head()
 				filename = strings.Join(args[1:], " ")
 			}
 
@@ -506,7 +515,7 @@ everywhere:
 			// - merge the two lists and use colors or a [x] to show
 			//   which files are in the index, which are untracked, ignored...
 			// - diff stats
-			stdout, _, err := git("ls-tree", branch()).Output()
+			stdout, _, err := git("ls-tree", head()).Output()
 			if err == nil {
 				// we're in a git repository
 				gitFiles := strings.Split(strings.TrimSpace(stdout), "\n")
