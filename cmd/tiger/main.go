@@ -1,6 +1,5 @@
 /*
 TODO(tso):
- - rm [-r] [WILDCARD] that doesn't fail miserably for hidden files
  - config (no args): --list
     - separate global, local, system
     - align around =
@@ -103,6 +102,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -554,6 +554,35 @@ everywhere:
 			}
 
 			fmt.Println()
+
+			// "improved" git rm
+			//  - don't fail just because .* matches . and ..
+			//  - don't choke just because [glob pattern] matches untracked or ignored files
+			// accomplishing this for now by globbing first
+			// and doing each rm one at a time
+			// so if one or more operations fail the other operations don't fail
+		case "rm":
+			flags := []string{}
+			paths := []string{}
+			for _, arg := range args[1:] {
+				switch arg {
+				case "-h", "--help", "-f", "--force", "-n", "-r", "--cached", "--ignore-unmatch", "--quiet", "--":
+					flags = append(flags, arg)
+				default:
+					glob, err := filepath.Glob(arg)
+					if err != nil {
+						fmt.Println(err)
+						break somewhere
+					}
+					paths = append(paths, glob...)
+				}
+			}
+			if len(paths) == 0 {
+				git(append([]string{"rm"}, flags...)...).Attach()
+			}
+			for _, path := range paths {
+				git(append([]string{"rm"}, append(flags, path)...)...).Attach()
+			}
 
 		// feature: draft: edit commit message while staging
 		case "draft":
