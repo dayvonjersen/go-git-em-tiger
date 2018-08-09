@@ -1,9 +1,5 @@
 /*
 TODO(tso):
- - config (no args): --list
-    - separate global, local, system
-    - align around =
-    - use pager
  - ignore:
     - echo $filename >> .gitignore && git add .gitignore
  - unignore:
@@ -583,6 +579,51 @@ everywhere:
 			for _, path := range paths {
 				git(append([]string{"rm"}, append(flags, path)...)...).Attach()
 			}
+
+		// feature: naked "git config" pretty-prints git config --list
+		case "config":
+			if len(args) != 1 {
+				git(args...).Attach()
+				break
+			}
+			system, _, _ := git("config", "--list", "--system").Output()
+			global, _, _ := git("config", "--list", "--global").Output()
+			local, _, _ := git("config", "--list", "--local").Output()
+			out := &buf{}
+
+			align := func(input string) string {
+				lines := strings.Split(input, "\n")
+				max := 0
+				for _, ln := range lines {
+					idx := strings.Index(ln, "=")
+					if idx > max {
+						max = idx
+					}
+				}
+				for i, ln := range lines {
+					idx := strings.Index(ln, "=")
+					if idx < 0 {
+						continue
+					}
+					key := ln[:idx]
+					value := ln[idx+1:]
+					lines[i] = key + strings.Repeat(" ", max-len(key)) + " = " + value
+				}
+				return strings.Join(lines, "\n")
+			}
+
+			fmt.Fprintln(out, "system:")
+			fmt.Fprintln(out, align(system))
+			fmt.Fprintln(out, "global:")
+			fmt.Fprintln(out, align(global))
+			fmt.Fprintln(out, "local:")
+			fmt.Fprintln(out, align(local))
+
+			less := pager()
+			less.Stdin = out
+			less.Stdout = os.Stdout
+			less.Stderr = os.Stderr
+			less.Run()
 
 		// feature: draft: edit commit message while staging
 		case "draft":
