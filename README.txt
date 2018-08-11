@@ -1,14 +1,12 @@
-experimenting with trying to improve my personal git workflow with an
-interactive git shell
+go-get-em-tiger: enhanced interactive git shell
 
 ---
 
-first I should say that many very good solutions already exist including:
+Firstly I should say that many very good solutions already exist including 
+but not limited to:
  ∗ git-sh (both shell and ruby versions iirc)
  ∗ fish shell can wrap commands like git iirc
  ∗ hub
-
-other git workflow improvement tools include
  ∗ vim-fugitive
  ∗ Atlassian SourceTree
  ∗ github desktop for windows
@@ -16,24 +14,146 @@ other git workflow improvement tools include
  ∗ GitKraken
  ∗ gitk
 
-(and of course shell scripts, aliases and functions)
+(and possibly your own personal shell scripts, aliases and functions)
 
 Objectively, there is nothing wrong with any of these tools and in fact
-they're pretty nifty. But I couldn't get as much use out of them as I'd have
-liked.
+I think they're all pretty nifty. 
+
+But I personally couldn't get as much use out of the ones I've used as I'd
+hoped.
 
 Adding yet another git wrapper to the list for the sake of not-invented-here
 is not my goal.
 
 Rather, I want to experiment with finding solutions that will let me do the
-most common things in a simpler way / with a better user experience:
+most common things in a simpler way / with a better user experience
 
-    # edit/draft a commit message while staging or
-    # stage/unstage while writing a commit message
+---
 
-    NOTE(tso): draft only makes sense if you can have the editor and the shell
-               open simultaneously, so terminal editor users will have to have
-               each in separate panes/tabs/windows/screen or tmux sessions
+INSTALL
+    go get github.com/fsnotify/fsnotify
+    go get generaltso/go-git-em-tiger/cmd/tiger
+
+FEATURES (screencasts soon™)
+
+ENHANCED PROMPT:
+
+ (to exit type "exit" or "quit" or simply press ctrl+c)
+
+ - typing "git" is not necessary, but it's ok if you do it anyway
+
+    git@master go-git-em-tiger % status
+    On branch master
+    Your branch is up-to-date with 'origin/master'.
+    nothing to commit, working tree clean
+    git@master go-git-em-tiger % git status
+    On branch master
+    Your branch is up-to-date with 'origin/master'.
+    nothing to commit, working tree clean
+
+ - all standard git commands work as usual and probably your custom ones too
+
+ - always shows current working tree status, which automatically updates
+   whenever a file changes (uses fsnotify)
+
+    README.txt +159/-15
+    git@master go-git-em-tiger %
+    README.txt +165/-15
+    git@master go-git-em-tiger %
+
+ - always shows HEAD as a readable name
+
+    $ tiger
+    git@master go-git-em-tiger % checkout -b new_branch
+    Switched to a new branch 'new_branch'
+    git@new_branch go-git-em-tiger % checkout master
+    git@master go-git-em-tiger % checkout HEAD^
+    [...]
+    HEAD is now at 515648e... 
+    git@master~1 go-git-em-tiger %
+
+ - always shows current directory as a relative path within git repo
+
+    $ cd $GOPATH/src/github.com/generaltso/go-git-em-tiger/cmd/tiger
+    $ tiger
+    git@master go-git-em-tiger/cmd/tiger %
+
+ - basic navigation
+
+    git@master go-git-em-tiger/cmd/tiger % cd ..
+    git@master go-git-em-tiger/cmd % ls
+    files known to git:
+        tiger/
+
+    current directory contents:
+        tiger/
+    git@master go-git-em-tiger/cmd % cd -
+    git@master go-git-em-tiger/cmd/tiger %
+
+ - works outside of a git repo too
+
+    $ mkdir example-repo
+    $ tiger
+    (not a git repository) tmp % cd example-repo
+    (not a git repository) example-repo % init
+    Initialized empty Git repository in /tmp/example-repo/.git/
+    git@master example-repo %
+
+ENHANCED GIT FUNCTIONALITY
+
+ - cat [@revision (optional, default: current HEAD)] [filename]
+ 
+   git cat-file blob [hash] (without having to look the hash up yourself)
+
+    git@master go-git-em-tiger/cmd/tiger % cat main.go
+    /*
+    TODO(tso):
+    [...]
+    git@master go-git-em-tiger/cmd/tiger % cat master~32 main.go
+    package main
+
+    import (
+        "bufio"
+    [...]
+
+ - config [with no args]
+ 
+   pretty print git config --list, separated into categories
+
+    git@master go-git-em-tiger/cmd/tiger % config
+    system:
+
+    global:
+    user.email        = tso@teknik.io
+    user.name         = tso
+    push.default      = simple
+    color.ui          = true
+    core.excludesfile = ~/.gitignore
+    core.editor       = gvim
+    core.quotepath    = false
+    core.pager        = diff-so-fancy | less --tabs=4 -RFX
+    [...]
+
+ - rm [same args as git rm]
+
+   - doesn't fail on .*
+   - doesn't fail on untracked or ignored files
+
+ - commit [same args as git commit]
+
+   - -m write one liner message without having to quote or escape
+   - always --allow-empty-message
+   - see also draft
+
+CUSTOM FEATURES
+
+ - draft [no args]
+ 
+   write a commit message while staging
+
+NOTE(tso): draft only makes sense if you can have the editor and the shell
+           open simultaneously, so terminal editor users will have to have
+           each in separate panes/tabs/windows/screen or tmux sessions
 
     git draft                     #                   *start writing commit message*
     git add something             # "oh right..."     *write about something*
@@ -46,23 +166,45 @@ most common things in a simpler way / with a better user experience:
 
     or at the end
     git commit --edit # same as git commit -t $GIT_DIR/COMMIT_DRAFTMSG
-                      # except you don't have to change the "template" for it to count
+                      # except you don't have to change the "template" for it 
+                      # to count
    
-    # simple check-in
-    git status
-    git add .
-    git commit -m 'one liner message'
-    git push
+ - checkin (or "ci" if you prefer)
 
-    # selective add/remove(#footnote-1)
-    git status
-    git add file_1
-    git status
-    git diff file_2
-    git add -p file_2
-    git status
-    ...
+   git add . && git commit && git push
 
+    - only does "git add ." when there's nothing staged, and prompts you first
+
+    - can specify commit message with "ci commit message goes here", otherwise
+      it prompts you
+
+    - only pushes if remotes are setup
+
+   some people like to review their commits and possibly rebase before pushing
+   rather than pushing on every commit (you might also need to commit --amend
+   or something else could happen that would require a push -f later)
+
+   I understand that and respect it (I do that too sometimes) but some people
+   (myself most of the time) like to commit and push everything as they go
+   especially when you're "in the zone" so it's a convenience but definitely:
+
+   **checkin should be used with caution**
+
+ - summary
+
+   github style summary with language statistics if you have my "l" command
+   installed (optional): go get github.com/generaltso/linguist/cmd/l
+
+    git@master go-git-em-tiger % summary
+    b6cb848 tso: update readme: document current features 8 minutes ago
+              commits: 35 branches: 2 contributors: 1
+                           Go: 100.00%
+
+---
+
+COMING SOON:
+    see also main.go which has my current TODO list at the top
+    
     # undo all changes to a file, staged or not
     git checkout some_file # tab-completion breaks here
         # can't do this during a merge/revert/rebase,
@@ -92,49 +234,9 @@ most common things in a simpler way / with a better user experience:
         # you always keep it up-to-date with .git/hooks which you could write
         # a hook for itself...
 
-    # remove/unstage 
-    git rm --cached .*  # tries to remove . and .. 
-                        #   fails with error
-                        #   doesn't unstage anything
-
-git cli has an unintuitive ui but you get used to it the more you work with it
-
-git cli actually has features that come close to what I want including
- ∗ git add -i
- ∗ git revert --no-commit
- ∗ git commit --allow-empty-message -m ""
- ∗ git ls-files
- ∗ git cat-file blob [hash of file @ revision] > file_with_merge_conflict
-
-and git cli has features I want to have exactly as-is
- ∗ git add -p
- ∗ git log -p
-
----
- 
-#footnote-1:
-    yes commits should be "atomic" and represent a single unit of work, ergo
-    you should commit after every single atomic change you make
-    
-    but in practice sometimes you end up doing two or more things at once and
-    still want to commit them separately. this requires adding files one at a time
-    (or using git add -p to split the work accordingly)
-
----
-
-Additional nice-to-have features:
-
- - up-to-date github-style summary:
-
-(master)
-3a24901   tso: update todo                   32 minutes ago
-commits: 331   branches: 12   releases: 0   contributors: 1
-                        Go: 100%
-
  - better -h and --help
     - should still do the default behavior so subcommand "help" instead
-      presents custom docs (of course after you make things like this you tend
-      to never need them yourself because you remember...)
+      presents custom docs 
 
 help log
      (* list of PRETTY FORMATS first, with less verbosity)
