@@ -1,12 +1,5 @@
 /*
 TODO(tso):
- - ignore:
-    - echo $filename >> .gitignore && git add .gitignore
- - unignore:
-    - echo "!"$filename >> .gitignore && git add .gitignore
- - ignored:
-    - ls files currently ignored
-    - cat .gitignore and .git/info/exclude
  - interactively setup remotes when push/pull fails
  - fix log --pretty="format string with spaces!"
     - and all other such args
@@ -94,6 +87,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -165,6 +159,17 @@ func draftFile() (string, error) {
 		return "", err
 	}
 	return dir + PATH_SEPARATOR + ".git" + PATH_SEPARATOR + "COMMIT_DRAFTMSG", nil
+}
+
+func ignoreFile() (*os.File, string, error) {
+	dir, err := gitDir()
+	if err != nil {
+		return nil, "", err
+	}
+	path := dir + PATH_SEPARATOR + ".gitignore"
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND, os.ModePerm)
+	checkErr(err)
+	return f, path, nil
 }
 
 // current branch/tag to display in prompt()
@@ -624,6 +629,24 @@ everywhere:
 			less.Stdout = os.Stdout
 			less.Stderr = os.Stderr
 			less.Run()
+
+		// feature: ignore/unignore: add lines to .gitignore
+		case "unignore":
+			for i := 1; i < len(args); i++ {
+				args[i] = "!" + args[i]
+			}
+			fallthrough
+		case "ignore":
+			f, abspath, err := ignoreFile()
+			if err != nil {
+				println("", "", err)
+				break
+			}
+			for _, arg := range args[1:] {
+				io.WriteString(f, arg+"\n")
+			}
+			f.Close()
+			git("add", abspath).Attach()
 
 		// feature: draft: edit commit message while staging
 		case "draft":
