@@ -38,3 +38,9 @@ func fileGetContents(filename string) string {
 func normalizePathSeparators(path string) string {
 	return strings.Replace(path, "\\", "/", -1)
 }
+
+func isDir(filename string) bool {
+	finfo, err := os.Stat(filename)
+	checkErr(err)
+	return finfo.IsDir()
+}

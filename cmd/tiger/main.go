@@ -556,6 +556,13 @@ everywhere:
 
 			fmt.Println()
 
+		case "mkdir": // doesn't do bash shell expansion e.g. mkdir -p go/{bin,pkg,src}/
+			if len(args) != 2 {
+				println("", "", fmt.Errorf("mkdir takes exactly 1 argument"))
+				break
+			}
+			checkErr(os.MkdirAll(args[1], os.ModePerm))
+
 			// "improved" git rm
 			//  - don't fail just because .* matches . and ..
 			//  - don't choke just because [glob pattern] matches untracked or ignored files
@@ -629,6 +636,41 @@ everywhere:
 			less.Stdout = os.Stdout
 			less.Stderr = os.Stderr
 			less.Run()
+
+			// feature: keep: ignore a subdir's contents but keep the dir in the working tree
+		case "keep":
+			if len(args) != 2 {
+				println("", "", fmt.Errorf("keep takes exactly 1 argument"))
+				break
+			}
+
+			// make sure we're in a git repo
+			_, err := gitDir()
+			if err != nil {
+				println("", "", fmt.Errorf("keep only works in a git repo!!"))
+				break
+			}
+
+			dir := strings.TrimRight(args[1], "\\/")
+			if !fileExists(dir) {
+				checkErr(os.MkdirAll(dir, os.ModePerm))
+			}
+			if !isDir(dir) {
+				println("", "", fmt.Errorf("%s is not a directory", dir))
+				break
+			}
+			keepFile := dir + PATH_SEPARATOR + ".keep"
+			if !fileExists(keepFile) {
+				f, err := os.Create(keepFile)
+				checkErr(err)
+				f.Close()
+			}
+
+			f, abspath, err := ignoreFile()
+			checkErr(err)
+			io.WriteString(f, dir+"/\n!"+dir+"/.keep\n")
+			f.Close()
+			git("add", "-f", keepFile, abspath).Attach()
 
 		// feature: ignore/unignore: add lines to .gitignore
 		case "unignore":
