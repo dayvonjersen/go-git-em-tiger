@@ -729,13 +729,14 @@ everywhere:
 				break
 			}
 			args = args[1:]
-			// enhanced behavior: accomodate one-liner commit message
-			//     ∗ always --allow-empty-message
-			flags := []string{"--allow-empty-message"}
+			flags := []string{}
 		here:
 			for n, arg := range args {
 				switch arg {
 				case "-m": // NOTE(tso): -m eats everything to end-of-line and uses it as commit message!
+					// enhanced behavior: accomodate one-liner commit message
+					//     ∗ always --allow-empty-message
+					flags = append(flags, "--allow-empty-message")
 					msg := ""
 					if len(args) > n+1 {
 						msg = strings.Join(args[n+1:], " ")
