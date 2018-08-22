@@ -380,6 +380,24 @@ func main() {
 		difflast = strings.TrimSpace(stdout)
 	}
 
+	displayUpdate := true
+	statusUpdate := func() {
+		if !displayUpdate {
+			return
+		}
+		stdout, _, err := git("diff", "--numstat").Output()
+		diff := strings.TrimSpace(stdout)
+		if err != nil || diff == difflast {
+			return
+		}
+		difflast = diff
+		fmt.Println()
+		prompt()
+		// 	log.Println(BgMagenta + "[status update here]" + Reset)
+	}
+
+	watchChan := make(chan struct{})
+	inputChan := make(chan struct{})
 	watch, err := newWatcher(
 		func(filename string) bool {
 			if path.Base(filename) == ".git" {
@@ -390,15 +408,7 @@ func main() {
 			return true
 		},
 		func() {
-			stdout, _, err := git("diff", "--numstat").Output()
-			diff := strings.TrimSpace(stdout)
-			if err != nil || diff == difflast {
-				return
-			}
-			difflast = diff
-			fmt.Println()
-			prompt()
-			// 	log.Println(BgMagenta + "[status update here]" + Reset)
+			watchChan <- struct{}{}
 		},
 	)
 	checkErr(err)
@@ -415,8 +425,28 @@ func main() {
 	prompt()
 
 	scanner := bufio.NewScanner(os.Stdin)
+	go func() {
+		for scanner.Scan() {
+			inputChan <- struct{}{}
+			<-inputChan
+		}
+	}()
+	sendInputSignal := false
 everywhere:
-	for scanner.Scan() {
+	for {
+		if sendInputSignal {
+			inputChan <- struct{}{}
+		}
+		displayUpdate = true
+		select {
+		case <-watchChan:
+			statusUpdate()
+			sendInputSignal = false
+			goto everywhere
+		case <-inputChan:
+			displayUpdate = false
+			sendInputSignal = true
+		}
 		args := strings.Split(scanner.Text(), " ")
 
 		// typing "git <command>" out of habit
