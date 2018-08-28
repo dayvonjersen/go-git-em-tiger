@@ -1,8 +1,6 @@
 /*
 TODO(tso):
  - interactively setup remotes when push/pull fails
- - fix log --pretty="format string with spaces!"
-    - and all other such args
  - stage: interactive staging
     ONE-BY-ONE: yes | git stage
        -OR-
@@ -447,7 +445,7 @@ everywhere:
 			displayUpdate = false
 			sendInputSignal = true
 		}
-		args := strings.Split(scanner.Text(), " ")
+		args := splitArgs(scanner.Text())
 
 		// typing "git <command>" out of habit
 		if args[0] == "git" {
