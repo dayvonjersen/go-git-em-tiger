@@ -1,5 +1,8 @@
 /*
 TODO(tso):
+ - show MERGING REVERTING etc in prompt
+ - add command "abort" as shorthand for merge --abort, revert --abort ...
+ - add command (think of a name) for "git cat-file blob [hash of file@revision] > file"
  - interactively setup remotes when push/pull fails
  - stage: interactive staging
     ONE-BY-ONE: yes | git stage
