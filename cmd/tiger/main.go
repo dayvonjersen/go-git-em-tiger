@@ -139,11 +139,11 @@ func println(stdout, stderr string, err error) error {
 }
 
 func gitDir() (string, error) {
-	stdout, _, err := git("worktree", "list", "--porcelain").Output()
+	stdout, _, err := git("rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimPrefix(strings.TrimSpace(strings.Split(stdout, "\n")[0]), "worktree "), nil
+	return strings.TrimSpace(stdout), nil
 }
 
 func config(param string) (string, error) {
