@@ -2,7 +2,7 @@
 
 > enhanced interactive git shell
 
-![](summary.gif)
+![](img/checkin.gif)
 
 ---
 
@@ -30,7 +30,7 @@ To exit the prompt at any time, use `exit` or `quit` or simply press `CTRL+C`.
 
 Typing "git" is not necessary, but it's ok if you do it anyway:
 
-![](gitgitgit.gif)
+![](img/gitgitgit.gif)
 
 <!--
     git@master go-git-em-tiger % status
@@ -48,7 +48,7 @@ which combines `git status -s` and `git diff --numstat`.
 Additionally, the prompt automatically updates whenever a file changes (using
 [fsnotify](https://github.com/fsnotify/fsnotify)):
 
-![](fsnotify.gif)
+![](img/fsnotify.gif)
 
 <!--
     README.txt +159/-15
@@ -59,7 +59,7 @@ Additionally, the prompt automatically updates whenever a file changes (using
 
 Always shows HEAD as a readable name:
 
-![](head.gif)
+![](img/head.gif)
 
 <!--
     $ tiger
@@ -75,7 +75,7 @@ Always shows HEAD as a readable name:
 Has basic navigation with `cd` and `ls` and always shows current directory as a
 relative path within git repo:
 
-![](cd.gif)
+![](img/cd.gif)
 
 <!--
     $ cd $GOPATH/src/github.com/generaltso/go-git-em-tiger/cmd/tiger
@@ -97,7 +97,7 @@ relative path within git repo:
 
 Works outside of a git repo too:
 
-![](init.gif)
+![](img/init.gif)
 
 <!--
     $ mkdir example-repo
@@ -115,7 +115,7 @@ Works outside of a git repo too:
 Basically `git cat-file blob [hash]` without having to look the blob hash up
 yourself with `git ls-tree [treeish]`.
 
-![](cat.gif)
+![](img/cat.gif)
 
 <!--
     git@master go-git-em-tiger/cmd/tiger % cat main.go
@@ -136,7 +136,7 @@ Pretty prints `git config --list`, separated into categories.
 
 *When arguments are supplied, regular `git config` is invoked*
 
-![](config.gif)
+![](img/config.gif)
 
 <!--
     git@master go-git-em-tiger/cmd/tiger % config
@@ -158,7 +158,7 @@ Pretty prints `git config --list`, separated into categories.
 
 Same as `git rm` except it doesn't fail on `.*` or untracked or ignored files.
 
-![](rm.gif)
+![](img/rm.gif)
 
 `commit` 
 
@@ -169,7 +169,7 @@ Same as `git commit` with the following improvements:
    - *always* passes `--allow-empty-message`
    - see also `draft`
 
-![](commit.gif)
+![](img/commit.gif)
 
 #### Custom Features / New Commands
 
@@ -189,8 +189,8 @@ NOTE(tso):
     trying to craft a meaningful commit message at the same time.
 ```
 
-![](draft-1.gif)
-![](draft-2.gif)
+![](img/draft-1.gif)
+![](img/draft-2.gif)
 
 <!--
     git draft                     #                   *start writing commit message*
@@ -233,14 +233,14 @@ NOTE(tso):
    not a recommended best practice at all.
 ```
 
-![](checkin.gif)
+![](img/checkin.gif)
 
 `summary`
 
    github style summary with language statistics if you have my "l" command
    installed (optional): go get [github.com/generaltso/linguist/cmd/l](https://github.com/generaltso/linguist/tree/master/cmd/l)
 
-![](summary.gif)
+![](img/summary.gif)
 
 <!--
     git@master go-git-em-tiger % summary
