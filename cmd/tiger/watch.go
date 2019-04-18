@@ -60,17 +60,17 @@ func (w *watcher) relay() {
 func (w *watcher) dispatch() {
 	var last time.Time
 	for e := range w.events {
-		diff := time.Since(last) - time.Since(e.t)
-		last = e.t
 		// log.Println("got:", path.Base(e.filename), diff)
 		if !w.validator(e.filename) {
 			// log.Println("file is not valid,          skipping...")
 			continue
 		}
+		diff := time.Since(last) - time.Since(e.t)
 		if diff < time.Millisecond*100 {
 			// log.Println("last event was < 100ms ago, skipping...")
 			continue
 		}
+		last = e.t
 		go w.callback()
 	}
 }
