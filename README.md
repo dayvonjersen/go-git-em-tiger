@@ -10,7 +10,7 @@
 
 ```
 $ go get github.com/fsnotify/fsnotify
-$ go get github.com/generaltso/go-git-em-tiger/cmd/tiger
+$ go get github.com/dayvonjersen/go-git-em-tiger/cmd/tiger
 ```
 
 ## Usage
@@ -78,7 +78,7 @@ relative path within git repo:
 ![](img/cd.gif)
 
 <!--
-    $ cd $GOPATH/src/github.com/generaltso/go-git-em-tiger/cmd/tiger
+    $ cd $GOPATH/src/github.com/dayvonjersen/go-git-em-tiger/cmd/tiger
     $ tiger
     git@master go-git-em-tiger/cmd/tiger %
 
@@ -238,7 +238,7 @@ NOTE(tso):
 `summary`
 
    github style summary with language statistics if you have my "l" command
-   installed (optional): go get [github.com/generaltso/linguist/cmd/l](https://github.com/generaltso/linguist/tree/master/cmd/l)
+   installed (optional): go get [github.com/dayvonjersen/linguist/cmd/l](https://github.com/dayvonjersen/linguist/tree/master/cmd/l)
 
 ![](img/summary.gif)
 
@@ -253,7 +253,7 @@ NOTE(tso):
 
 ## *Coming Soon*&trade;:
 
-> See also [main.go](https://github.com/generaltso/go-git-em-tiger/blob/master/cmd/tiger/main.go#L1-L84) 
+> See also [main.go](https://github.com/dayvonjersen/go-git-em-tiger/blob/master/cmd/tiger/main.go#L1-L84) 
 > which has my current TODO list at the top.
 
  - `git grep -n` always
