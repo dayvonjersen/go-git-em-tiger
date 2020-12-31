@@ -470,29 +470,38 @@ everywhere:
 
 		// reinventing coreutils poorly
 		case "cd":
+			cd := ""
 			if len(args) > 1 {
-				cd := strings.Join(args[1:], " ")
+				cd = strings.Join(args[1:], " ")
 				if cd == "-" {
 					cd = lastCwd
 				}
-				lastCwd, err = os.Getwd()
-				checkErr(err)
-				err := os.Chdir(cd)
+			} else {
+				currentGwd, err := gitDir()
 				if err != nil {
-					fmt.Println(Red, err, Reset)
+					println("", "", fmt.Errorf("cd without argument only works in a git repo!!"))
+					break
 				} else {
-					difflast = ""
-					stdout, _, err := git("diff", "--numstat").Output()
+					cd = currentGwd
+				}
+			}
+			lastCwd, err = os.Getwd()
+			checkErr(err)
+			err := os.Chdir(cd)
+			if err != nil {
+				fmt.Println(Red, err, Reset)
+			} else {
+				difflast = ""
+				stdout, _, err := git("diff", "--numstat").Output()
+				if err == nil {
+					difflast = strings.TrimSpace(stdout)
+				}
+				currentGwd, err := gitDir()
+				if currentGwd != gwd {
+					watch.RemoveAll()
 					if err == nil {
-						difflast = strings.TrimSpace(stdout)
-					}
-					currentGwd, err := gitDir()
-					if currentGwd != gwd {
-						watch.RemoveAll()
-						if err == nil {
-							gwd = currentGwd
-							go watch.AddWithSubdirs(gwd)
-						}
+						gwd = currentGwd
+						go watch.AddWithSubdirs(gwd)
 					}
 				}
 			}
