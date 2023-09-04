@@ -756,7 +756,7 @@ everywhere:
 
 			if len(args) == 1 {
 				// standard behavior (open editor, abort due to empty message)
-				println(git("commit").Output())
+				git("commit").Attach()
 				break
 			}
 			args = args[1:]
@@ -782,7 +782,7 @@ everywhere:
 					flags = append(flags, arg)
 				}
 			}
-			println(git(append([]string{"commit"}, flags...)...).Output())
+			git(append([]string{"commit"}, flags...)...).Attach()
 
 			// feature: checkin: add everything, commit, and push
 		case "ci", "checkin":
